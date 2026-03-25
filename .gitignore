@@ -45,3 +45,4 @@ docs/superpowers/
 
 # Alembic compiled migrations
 alembic/versions/*.pyc
+.vercel
