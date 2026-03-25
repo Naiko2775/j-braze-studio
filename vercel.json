@@ -1,41 +1,15 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "apps/web/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    },
-    {
-      "src": "apps/api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
+  "buildCommand": "cd apps/web && npm install && npm run build",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "apps/api/index.py": {
+      "runtime": "@vercel/python@4.3.1",
+      "maxDuration": 60
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "apps/api/index.py"
-    },
-    {
-      "src": "/(static/.*)",
-      "dest": "apps/web/$1"
-    },
-    {
-      "src": "/(assets/.*)",
-      "dest": "apps/web/$1"
-    },
-    {
-      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
-      "dest": "apps/web/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "apps/web/index.html"
-    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/apps/api/index.py" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
