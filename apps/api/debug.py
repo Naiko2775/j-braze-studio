@@ -1,65 +1,45 @@
-"""Minimal debug endpoint for Vercel."""
+"""Minimal debug endpoint for Vercel — uses http.server handler format."""
+from http.server import BaseHTTPRequestHandler
 import traceback
 
-def handler(request, context=None):
-    """HTTP handler for debugging imports."""
-    try:
-        import sys
-        import os
 
-        API_DIR = os.path.dirname(os.path.abspath(__file__))
-        if API_DIR not in sys.path:
-            sys.path.insert(0, API_DIR)
-
-        errors = []
-
-        # Test basic imports
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
         try:
-            from fastapi import FastAPI
-            errors.append("fastapi: OK")
-        except Exception as e:
-            errors.append(f"fastapi: FAIL - {e}")
+            import sys
+            import os
 
-        try:
-            from mangum import Mangum
-            errors.append("mangum: OK")
-        except Exception as e:
-            errors.append(f"mangum: FAIL - {e}")
+            API_DIR = os.path.dirname(os.path.abspath(__file__))
+            if API_DIR not in sys.path:
+                sys.path.insert(0, API_DIR)
 
-        try:
-            from sqlalchemy import create_engine
-            errors.append("sqlalchemy: OK")
-        except Exception as e:
-            errors.append(f"sqlalchemy: FAIL - {e}")
+            lines = [f"Python: {sys.version}", f"CWD: {os.getcwd()}", f"API_DIR: {API_DIR}", ""]
 
-        try:
-            import anthropic
-            errors.append("anthropic: OK")
-        except Exception as e:
-            errors.append(f"anthropic: FAIL - {e}")
+            # Test imports one by one
+            for mod_name in ["fastapi", "mangum", "sqlalchemy", "anthropic", "pg8000", "pydantic", "openpyxl", "tenacity", "requests", "dotenv"]:
+                try:
+                    __import__(mod_name)
+                    lines.append(f"{mod_name}: OK")
+                except Exception as e:
+                    lines.append(f"{mod_name}: FAIL - {e}")
 
-        try:
-            import pg8000
-            errors.append("pg8000: OK")
-        except Exception as e:
-            errors.append(f"pg8000: FAIL - {e}")
+            lines.append("")
 
-        try:
-            from main import handler as h
-            errors.append("main.handler: OK")
-        except Exception as e:
-            errors.append(f"main.handler: FAIL - {e}")
-            errors.append(traceback.format_exc())
+            # Test main import
+            try:
+                from main import handler as h
+                lines.append("main.handler: OK")
+            except Exception as e:
+                lines.append(f"main.handler: FAIL - {e}")
+                lines.append(traceback.format_exc())
 
-        body = "\n".join(errors)
-        return {
-            "statusCode": 200,
-            "headers": {"content-type": "text/plain"},
-            "body": body,
-        }
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "headers": {"content-type": "text/plain"},
-            "body": f"FATAL: {e}\n{traceback.format_exc()}",
-        }
+            body = "\n".join(lines)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(body.encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(f"FATAL: {e}\n{traceback.format_exc()}".encode())
