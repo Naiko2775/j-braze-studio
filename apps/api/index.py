@@ -42,6 +42,13 @@ class handler(BaseHTTPRequestHandler):
 
     def _handle(self):
         try:
+            import asyncio
+            # Ensure there is an event loop for Mangum/ASGI
+            try:
+                asyncio.get_event_loop()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
+
             from mangum import Mangum
             mangum_handler = Mangum(fastapi_app, lifespan="off")
 
