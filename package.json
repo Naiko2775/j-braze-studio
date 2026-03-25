@@ -1,0 +1,15 @@
+{
+  "name": "j-braze-studio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && uvicorn main:app --reload --port 8000",
+    "build:web": "cd apps/web && npm run build",
+    "test:api": "cd apps/api && python -m pytest tests/ -v",
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

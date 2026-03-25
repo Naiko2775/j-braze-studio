@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "apps/web/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
+      "src": "apps/api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "apps/api/index.py"
+    },
+    {
+      "src": "/(static/.*)",
+      "dest": "apps/web/$1"
+    },
+    {
+      "src": "/(assets/.*)",
+      "dest": "apps/web/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
+      "dest": "apps/web/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "apps/web/index.html"
+    }
+  ]
+}
