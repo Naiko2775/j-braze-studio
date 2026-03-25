@@ -9,8 +9,13 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jbraze_dev.db")
 
-# Neon PostgreSQL : convertir postgres:// en postgresql+pg8000://
+# Valider que c'est une vraie URL de BDD (pas une valeur parasite)
 _url = DATABASE_URL
+if not any(_url.startswith(p) for p in ("sqlite", "postgres", "postgresql", "mysql")):
+    # Valeur invalide (ex: "braze") — fallback SQLite
+    _url = "sqlite:///./jbraze_dev.db"
+
+# Neon PostgreSQL : convertir postgres:// en postgresql+pg8000://
 if _url.startswith("postgres://"):
     _url = _url.replace("postgres://", "postgresql+pg8000://", 1)
 elif _url.startswith("postgresql://") and "+pg8000" not in _url:
