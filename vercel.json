@@ -15,7 +15,8 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/apps/api/index.py" },
-    { "handle": "filesystem" },
+    { "src": "/assets/(.*)", "dest": "/apps/web/assets/$1" },
+    { "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot|map))", "dest": "/apps/web/$1" },
     { "src": "/(.*)", "dest": "/apps/web/index.html" }
   ]
 }
