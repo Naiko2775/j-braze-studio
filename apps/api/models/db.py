@@ -44,6 +44,16 @@ class Base(DeclarativeBase):
     pass
 
 
+def _ensure_tables():
+    """Crée les tables si elles n'existent pas (SQLite serverless)."""
+    if _url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
+
+
+# Auto-create tables pour SQLite (serverless /tmp ou dev local)
+_ensure_tables()
+
+
 def get_db():
     """Dependency FastAPI pour obtenir une session DB."""
     db = SessionLocal()
