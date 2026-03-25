@@ -11,9 +11,14 @@
     {
       "src": "apps/api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "apps/api/debug.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
+    { "src": "/debug", "dest": "/apps/api/debug.py" },
     { "src": "/api/(.*)", "dest": "/apps/api/index.py" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/apps/web/index.html" }
