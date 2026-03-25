@@ -1,8 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { MODULES, UTILITY_LINKS } from "../constants";
+import { useAuth } from "../context/AuthContext";
 import ProjectSelector from "./ProjectSelector";
 
 export default function TopNav() {
+  const { logout } = useAuth();
   return (
     <nav
       style={{
@@ -95,6 +97,39 @@ export default function TopNav() {
           />
           v1.0
         </div>
+        <div
+          style={{
+            width: 1,
+            height: 24,
+            background: "rgba(255,255,255,0.12)",
+            margin: "0 8px",
+          }}
+        />
+        <button
+          onClick={logout}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "rgba(255,255,255,0.45)",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: "pointer",
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontFamily: "var(--font-family)",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.85)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+            e.currentTarget.style.background = "transparent";
+          }}
+        >
+          Deconnexion
+        </button>
       </div>
     </nav>
   );
