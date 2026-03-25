@@ -44,14 +44,17 @@ class Base(DeclarativeBase):
     pass
 
 
-def _ensure_tables():
+_tables_created = False
+
+
+def ensure_tables():
     """Crée les tables si elles n'existent pas (SQLite serverless)."""
+    global _tables_created
+    if _tables_created:
+        return
     if _url.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
-
-
-# Auto-create tables pour SQLite (serverless /tmp ou dev local)
-_ensure_tables()
+    _tables_created = True
 
 
 def get_db():
