@@ -12,8 +12,16 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jbraze_dev.db")
 # Valider que c'est une vraie URL de BDD (pas une valeur parasite)
 _url = DATABASE_URL
 if not any(_url.startswith(p) for p in ("sqlite", "postgres", "postgresql", "mysql")):
-    # Valeur invalide (ex: "braze") — fallback SQLite
-    _url = "sqlite:///./jbraze_dev.db"
+    # Valeur invalide (ex: "braze") — fallback SQLite dans /tmp (writable en serverless)
+    _url = "sqlite:////tmp/jbraze_dev.db"
+
+# En serverless, /var/task est read-only — utiliser /tmp pour SQLite
+if _url.startswith("sqlite:///./"):
+    import pathlib
+    # Si le répertoire courant n'est pas writable, utiliser /tmp
+    cwd = pathlib.Path.cwd()
+    if not os.access(str(cwd), os.W_OK):
+        _url = "sqlite:////tmp/jbraze_dev.db"
 
 # Neon PostgreSQL : convertir postgres:// en postgresql+pg8000://
 if _url.startswith("postgres://"):
