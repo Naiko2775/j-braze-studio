@@ -2,12 +2,6 @@
   "version": 2,
   "buildCommand": "cd apps/web && npm install && npm run build",
   "outputDirectory": "apps/web/dist",
-  "functions": {
-    "apps/api/index.py": {
-      "runtime": "@vercel/python@4.3.1",
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/apps/api/index.py" },
     { "source": "/(.*)", "destination": "/index.html" }
