@@ -4,10 +4,9 @@ import { useApi } from "../shared/hooks/useApi";
 /* ── Constantes ── */
 
 const CLAUDE_MODELS = [
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (2025-05-14)" },
-  { value: "claude-opus-4-20250514", label: "Claude Opus 4 (2025-05-14)" },
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (2024-10-22)" },
-  { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (2024-10-22)" },
+  { value: "claude-opus-5", label: "Claude Opus 5" },
+  { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
 ];
 
 const BRAZE_INSTANCES = [

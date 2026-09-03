@@ -39,4 +39,4 @@ def get_claude_client() -> anthropic.Anthropic:
 
 def get_default_model() -> str:
     """Retourne le modele Claude par defaut."""
-    return os.getenv("CLAUDE_DEFAULT_MODEL", "claude-sonnet-4-20250514")
+    return os.getenv("CLAUDE_DEFAULT_MODEL", "claude-opus-5")
