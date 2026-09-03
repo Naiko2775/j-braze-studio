@@ -11,7 +11,7 @@ load_dotenv()
 # Ajouter le repertoire api au path
 sys.path.insert(0, os.path.dirname(__file__) + "/..")
 
-from models.db import Base
+from models.db import Base, normalize_database_url
 from models.analysis import Analysis
 from models.generation import Generation
 from models.migration_job import MigrationJob
@@ -26,7 +26,12 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    return os.getenv("DATABASE_URL", "sqlite:///./jbraze_dev.db")
+    """Meme normalisation que l'application (driver pg8000 inclus).
+
+    Sans cela, une URL Neon standard "postgresql://" ferait tomber Alembic
+    sur psycopg2, absent de requirements.txt.
+    """
+    return normalize_database_url(os.getenv("DATABASE_URL"))
 
 
 def run_migrations_offline():
