@@ -108,6 +108,17 @@ IMPORTANT:
 """
 
 
+def _with_model(payload: dict, model: str) -> dict:
+    """Estampille le resultat avec le modele reellement appele.
+
+    Le routeur persiste ce champ dans l'historique. Sans cela il enregistrait
+    `req.model or "demo"`, or req.model est l'override client, presque toujours
+    absent : l'historique affichait "demo" pour de vrais appels factures.
+    Meme convention que services/liquid/generator.py.
+    """
+    return {**payload, "model_used": model}
+
+
 def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
     """Analyse une liste de use cases via Claude et retourne le JSON structure.
 
@@ -116,7 +127,7 @@ def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         logger.info("Pas de cle API Anthropic -- mode demo (data model analyzer)")
-        return DEMO_RESULTS
+        return _with_model(DEMO_RESULTS, "demo")
 
     from services.claude_client import get_claude_client, get_analysis_model
 
@@ -147,10 +158,10 @@ def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
     ).strip()
 
     if not raw_text:
-        return {
+        return _with_model({
             "error": "La reponse Claude ne contient aucun bloc de texte",
             "raw_response": f"stop_reason={response.stop_reason}",
-        }
+        }, model)
 
     # Nettoyer le JSON si entoure de ```json ... ```
     if raw_text.startswith("```"):
@@ -161,23 +172,23 @@ def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
         raw_text = "\n".join(lines)
 
     try:
-        return json.loads(raw_text)
+        return _with_model(json.loads(raw_text), model)
     except json.JSONDecodeError:
         match = re.search(r"\{[\s\S]*\}", raw_text)
         if match:
             try:
-                return json.loads(match.group(0))
+                return _with_model(json.loads(match.group(0)), model)
             except json.JSONDecodeError:
                 pass
-        return {
+        return _with_model({
             "error": "L'agent n'a pas retourne un JSON valide",
             "raw_response": raw_text,
-        }
+        }, model)
 
 
 def analyze_use_cases_demo() -> dict:
     """Retourne les resultats de demonstration sans appel API."""
-    return DEMO_RESULTS
+    return _with_model(DEMO_RESULTS, "demo")
 
 
 def format_results_text(results: dict) -> str:

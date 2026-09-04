@@ -53,7 +53,7 @@ def analyze(req: AnalyzeRequest, db: Session = Depends(get_db)):
         project_name=req.project_name,
         use_case="\n".join(req.use_cases),
         result=result,
-        model_used=req.model or "demo",
+        model_used=result.get("model_used", "unknown"),
     )
     db.add(analysis)
     db.commit()
