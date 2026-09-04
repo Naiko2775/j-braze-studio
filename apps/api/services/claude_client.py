@@ -43,13 +43,16 @@ def get_default_model() -> str:
 
 
 def get_analysis_model() -> str:
-    """Modele du module Data Model, choisi pour la reactivite en demo.
+    """Modele du module Data Model.
 
-    Mesure sur un use case reel (relance panier abandonne, 8057 tokens
-    d'entree) : opus-5 108.9s / sonnet-5 62.6s / haiku-4-5 36.9s, les trois
-    renvoyant un JSON valide et les quatre cles attendues par l'interface.
-    Haiku produit une analyse plus courte -- il omet notamment Catalog /
-    Catalog Item. Pour retrouver l'analyse complete, definir
-    CLAUDE_ANALYSIS_MODEL=claude-opus-5 dans les variables d'environnement.
+    Opus 5 par defaut : sur un use case reel (relance panier abandonne, 8057
+    tokens d'entree) il produit l'analyse la plus riche et la plus reguliere
+    -- 16 entites, 73 attributs -- la ou Haiku 4.5 varie de 5 a 12 champs
+    d'un appel a l'autre et ne cite Catalog qu'une fois sur trois.
+
+    Le compromis est la latence : ~109s contre ~34-52s pour Haiku 4.5
+    ($0.288 contre $0.026 par analyse). Pour une demo ou la reactivite prime
+    sur la profondeur, definir sans redeploiement :
+        CLAUDE_ANALYSIS_MODEL=claude-haiku-4-5
     """
-    return os.getenv("CLAUDE_ANALYSIS_MODEL", "claude-haiku-4-5")
+    return os.getenv("CLAUDE_ANALYSIS_MODEL", "claude-opus-5")
