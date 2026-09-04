@@ -2,6 +2,7 @@
 import os
 
 import anthropic
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +27,16 @@ def get_api_key() -> str | None:
     return _runtime_api_key or os.getenv("ANTHROPIC_API_KEY")
 
 
+def get_client_timeout() -> float:
+    """Timeout HTTP du client Anthropic, en secondes.
+
+    240s par defaut : une analyse Data Model complete avec Opus 5 tourne autour
+    de 110s, il faut donc de la marge, mais sans timeout la requete pouvait
+    rester pendue jusqu'a la coupure de la fonction serverless.
+    """
+    return float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "240"))
+
+
 def get_claude_client() -> anthropic.Anthropic:
     """Cree et retourne le client Anthropic avec la cle serveur."""
     api_key = get_api_key()
@@ -34,7 +45,12 @@ def get_claude_client() -> anthropic.Anthropic:
             "ANTHROPIC_API_KEY non definie. "
             "Renseignez-la dans Parametres ou dans les variables d'environnement."
         )
-    return anthropic.Anthropic(api_key=api_key)
+    # Connexion coupee court (10s) mais lecture longue : c'est la generation qui
+    # prend du temps, pas l'etablissement du socket.
+    timeout = httpx.Timeout(get_client_timeout(), connect=10.0)
+    # max_retries laisse a la valeur par defaut du SDK (2 tentatives de reprise
+    # sur 429/5xx/erreurs reseau).
+    return anthropic.Anthropic(api_key=api_key, timeout=timeout)
 
 
 def get_default_model() -> str:

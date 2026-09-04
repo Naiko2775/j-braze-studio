@@ -5,11 +5,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
+# L'API est publiquement joignable et non authentifiee : le Swagger et le
+# schema OpenAPI sont donc coupes par defaut. Mettre JBRAZE_ENABLE_DOCS=1
+# (dev ou preview) pour les reactiver sans toucher au code.
+DOCS_ENABLED = os.environ.get("JBRAZE_ENABLE_DOCS", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 app = FastAPI(
     title="J-Braze Studio API",
     version="1.0.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if DOCS_ENABLED else None,
+    redoc_url="/api/redoc" if DOCS_ENABLED else None,
+    openapi_url="/api/openapi.json" if DOCS_ENABLED else None,
 )
 
 app.add_middleware(

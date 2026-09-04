@@ -1,4 +1,5 @@
 """Endpoints pour le module Data Model."""
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -24,6 +25,75 @@ from services.data_model.estimator import estimate_data_points
 router = APIRouter(prefix="/api/data-model", tags=["data-model"])
 
 
+def _api_message(exc: Exception) -> str:
+    """Message lisible d'une erreur SDK Anthropic.
+
+    Le corps de la reponse ({"error": {"message": ...}}) porte le libelle utile ;
+    l'attribut .message n'est qu'un repli.
+    """
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and error.get("message"):
+            return str(error["message"])
+        if isinstance(body.get("message"), str):
+            return body["message"]
+    return getattr(exc, "message", None) or str(exc)
+
+
+def _is_credit_error(exc: Exception) -> bool:
+    """Detecte le refus pour credit epuise, renvoye en 400 par l'API."""
+    return "credit balance" in f"{_api_message(exc)} {exc}".lower()
+
+
+def _run_analysis(use_cases: list[str], model: str | None) -> dict:
+    """Appelle l'analyseur Claude et traduit les erreurs SDK en HTTP lisibles.
+
+    Sans ce mapping, un credit Anthropic epuise remontait en 500 nu cote UI,
+    indiscernable d'un bug applicatif.
+    """
+    try:
+        return analyze_use_cases(use_cases, model=model)
+    except anthropic.AuthenticationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Cle API Anthropic invalide ou credit epuise. Verifiez la cle dans Parametres.",
+        ) from exc
+    except anthropic.BadRequestError as exc:
+        if _is_credit_error(exc):
+            raise HTTPException(
+                status_code=502,
+                detail="Cle API Anthropic invalide ou credit epuise. Rechargez le compte Anthropic.",
+            ) from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Requete refusee par l'API Anthropic : {_api_message(exc)}",
+        ) from exc
+    except anthropic.RateLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="Limite de debit Anthropic atteinte. Patientez une minute puis relancez l'analyse.",
+        ) from exc
+    except anthropic.APITimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Delai depasse cote API Anthropic. Relancez l'analyse ou choisissez un modele plus rapide.",
+        ) from exc
+    except anthropic.APIConnectionError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Connexion a l'API Anthropic impossible. Verifiez le reseau puis relancez.",
+        ) from exc
+    except anthropic.APIStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erreur API Anthropic ({exc.status_code}) : {_api_message(exc)}",
+        ) from exc
+    except ValueError as exc:
+        # Cle API absente au moment de construire le client.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 class AnalyzeRequest(BaseModel):
     use_cases: list[str]
     project_name: str | None = None
@@ -45,7 +115,7 @@ def analyze(req: AnalyzeRequest, db: Session = Depends(get_db)):
     if req.demo:
         result = analyze_use_cases_demo()
     else:
-        result = analyze_use_cases(req.use_cases, model=req.model)
+        result = _run_analysis(req.use_cases, req.model)
 
     # Persister en BDD
     analysis = Analysis(

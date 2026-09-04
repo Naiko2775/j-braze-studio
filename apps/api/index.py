@@ -13,13 +13,17 @@ if API_DIR not in sys.path:
     sys.path.insert(0, API_DIR)
 
 from http.server import BaseHTTPRequestHandler
+import base64
 import json
 import asyncio
+import logging
 from urllib.parse import urlparse, unquote
 
 
 # Import FastAPI app
 from main import app as fastapi_app
+
+logger = logging.getLogger(__name__)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -97,23 +101,41 @@ class handler(BaseHTTPRequestHandler):
             resp_headers = response.get("headers", {})
             resp_body = response.get("body", "")
 
+            # Mangum encode en base64 tout corps dont le Content-Type n'est pas
+            # textuel : c'est le cas de l'export Excel (.xlsx). Sans ce decodage,
+            # la chaine base64 etait ecrite telle quelle dans le fichier et Excel
+            # refusait de l'ouvrir. Le CSV passait car "text/csv" reste en clair.
+            if response.get("isBase64Encoded"):
+                out_bytes = base64.b64decode(resp_body or "")
+            elif isinstance(resp_body, bytes):
+                out_bytes = resp_body
+            else:
+                out_bytes = (resp_body or "").encode("utf-8")
+
             self.send_response(status_code)
             for k, v in resp_headers.items():
+                # Le Content-Length de Mangum porte sur le corps encode : on le
+                # recalcule sur les octets reellement emis.
+                if k.lower() == "content-length":
+                    continue
                 self.send_header(k, v)
+            self.send_header("Content-Length", str(len(out_bytes)))
             self.end_headers()
 
-            if isinstance(resp_body, str):
-                self.wfile.write(resp_body.encode("utf-8"))
-            elif isinstance(resp_body, bytes):
-                self.wfile.write(resp_body)
+            self.wfile.write(out_bytes)
 
-        except Exception as e:
-            import traceback
-            error_body = json.dumps({"error": str(e), "trace": traceback.format_exc()})
+        except Exception:
+            # La stacktrace reste cote serveur (logs Vercel) : la renvoyer au
+            # client exposait l'arborescence du projet et les variables d'appel.
+            logger.exception("Erreur non geree dans le handler serverless")
+            error_body = json.dumps(
+                {"error": "Erreur interne du serveur"}
+            ).encode("utf-8")
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error_body)))
             self.end_headers()
-            self.wfile.write(error_body.encode("utf-8"))
+            self.wfile.write(error_body)
 
     def log_message(self, format, *args):
         """Suppress default logging."""
