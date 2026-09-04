@@ -9,11 +9,46 @@ const MODES = [
   { id: "full", label: "Full", desc: "Migration complete de tous les contacts", color: "var(--color-red)" },
 ];
 
+// Plateformes de demonstration : le backend force le dry run (aucune ecriture Braze)
+const DEMO_PLATFORMS = ["demo", "sfmc_demo"];
+
 function formatDuration(seconds) {
   if (!seconds || seconds < 0) return "0s";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Ne jamais laisser passer autre chose qu'un nombre : le backend renvoie des
+// objets sur certaines cles, et un objet rendu comme enfant React fait planter
+// l'ecran ("Objects are not valid as a React child").
+function toCount(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+// Le resultat de /migration/run a deux formes selon le mode :
+// - warmup : total_contacts / total_success / total_failed (entiers plats)
+// - dry_run et full : { contacts: { success, failed, errors }, segments, templates }
+function readResultCounters(result) {
+  const empty = { total: 0, success: 0, failed: 0 };
+  if (!result || typeof result !== "object") return empty;
+
+  if (typeof result.total_contacts === "number") {
+    return {
+      total: toCount(result.total_contacts),
+      success: toCount(result.total_success),
+      failed: toCount(result.total_failed),
+    };
+  }
+
+  const contacts = result.contacts;
+  if (contacts && typeof contacts === "object") {
+    const success = toCount(contacts.success);
+    const failed = toCount(contacts.failed);
+    return { total: success + failed, success, failed };
+  }
+
+  return empty;
 }
 
 export default function MigrationRunner({ platform, credentials, previewData, onMigrationJob }) {
@@ -25,6 +60,7 @@ export default function MigrationRunner({ platform, credentials, previewData, on
   const { loading: launching, error: launchError, call: launchCall } = useApi();
   const { currentProject } = useProject();
 
+  const isDemoPlatform = DEMO_PLATFORMS.includes(platform);
   const isRunning = status?.status === "running" || status?.status === "pending";
   const isFinished = status?.status === "completed" || status?.status === "failed" || status?.status === "stopped";
 
@@ -80,17 +116,15 @@ export default function MigrationRunner({ platform, credentials, previewData, on
       // The POST /run endpoint is synchronous: if it returns a status and result,
       // use them directly instead of relying on polling
       if (result.status === "completed" || result.status === "failed") {
-        const contacts = result.result?.contacts || result.result?.total_contacts || 0;
-        const success = result.result?.success || result.result?.total_success || 0;
-        const failed = result.result?.failed || result.result?.total_failed || 0;
+        const counters = readResultCounters(result.result);
         setStatus({
           status: result.status,
           progress: {
-            total: contacts,
-            processed: contacts,
-            success: success,
-            errors: failed,
-            elapsed_seconds: result.result?.elapsed_seconds || 0,
+            total: counters.total,
+            processed: counters.total,
+            success: counters.success,
+            errors: counters.failed,
+            elapsed_seconds: toCount(result.result?.elapsed_seconds),
           },
           result: result.result,
         });
@@ -129,19 +163,27 @@ export default function MigrationRunner({ platform, credentials, previewData, on
     setJob(null);
     setStatus(null);
     setStopping(false);
+    if (onMigrationJob) onMigrationJob(null);
   };
 
   // When status is completed/failed, read counters from result (sync execution)
   // otherwise fall back to progress (async/polling)
   const progress = status?.progress || {};
-  const resultData = status?.result || {};
+  const resultData = status?.result || null;
+  const counters = readResultCounters(resultData);
   const isTerminal = status?.status === "completed" || status?.status === "failed" || status?.status === "stopped";
-  const total = progress.total || (isTerminal ? (resultData.contacts || resultData.total_contacts || 0) : 0);
-  const processed = progress.processed || (isTerminal ? total : 0);
-  const successCount = progress.success || (isTerminal ? (resultData.success || resultData.total_success || 0) : 0);
-  const errorCount = progress.errors || (isTerminal ? (resultData.failed || resultData.total_failed || 0) : 0);
+  const total = toCount(progress.total) || (isTerminal ? counters.total : 0);
+  const processed = toCount(progress.processed) || (isTerminal ? counters.total : 0);
+  const successCount = toCount(progress.success) || (isTerminal ? counters.success : 0);
+  const errorCount = toCount(progress.errors) || (isTerminal ? counters.failed : 0);
   const progressPct = total > 0 ? Math.round((processed / total) * 100) : (isTerminal ? 100 : 0);
-  const elapsed = progress.elapsed_seconds || resultData.elapsed_seconds || 0;
+  const elapsed = toCount(progress.elapsed_seconds) || toCount(resultData?.elapsed_seconds);
+
+  // Recapitulatif des autres objets migres (formes dry_run / full uniquement)
+  const segmentsFetched = toCount(resultData?.segments?.fetched);
+  const templatesMigrated = toCount(resultData?.templates?.success);
+  const isDryRun = resultData?.dry_run === true;
+  const forcedDryRun = resultData?.forced_dry_run === true;
 
   return (
     <div className="card">
@@ -182,8 +224,28 @@ export default function MigrationRunner({ platform, credentials, previewData, on
           </div>
         )}
 
+        {/* Demo platform notice */}
+        {isDemoPlatform && !job && (
+          <div style={{
+            background: "rgba(59, 130, 246, 0.06)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: "var(--radius-md)",
+            padding: "12px 16px",
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ fontSize: "1.2rem" }}>&#8505;</span>
+            <span className="text-sm" style={{ color: "#2563eb", fontWeight: 600 }}>
+              Jeu de demonstration : le dry run est force cote serveur, aucune donnee
+              fictive ne peut etre ecrite dans Braze, quel que soit le mode choisi.
+            </span>
+          </div>
+        )}
+
         {/* Full mode warning */}
-        {mode === "full" && !job && (
+        {mode === "full" && !job && !isDemoPlatform && (
           <div style={{
             background: "rgba(239, 68, 68, 0.06)",
             border: "1px solid rgba(239, 68, 68, 0.2)",
@@ -325,6 +387,18 @@ export default function MigrationRunner({ platform, credentials, previewData, on
                 <div className="text-xs text-muted" style={{ marginTop: 4 }}>
                   {successCount} contacts migres, {errorCount} erreurs en {formatDuration(elapsed)}
                 </div>
+                {(segmentsFetched > 0 || templatesMigrated > 0) && (
+                  <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                    {segmentsFetched} segments analyses, {templatesMigrated} templates convertis
+                    (AMPscript &rarr; Liquid)
+                  </div>
+                )}
+                {isDryRun && (
+                  <div className="text-xs text-muted" style={{ marginTop: 2, fontWeight: 600 }}>
+                    Dry run{forcedDryRun ? " force (plateforme de demonstration)" : ""} :
+                    {" "}aucune ecriture envoyee a Braze.
+                  </div>
+                )}
               </div>
             )}
           </div>

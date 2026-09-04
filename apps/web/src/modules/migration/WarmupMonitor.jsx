@@ -1,11 +1,5 @@
-const WARMUP_STAGES = [
-  { pct: 1, label: "1%" },
-  { pct: 5, label: "5%" },
-  { pct: 10, label: "10%" },
-  { pct: 25, label: "25%" },
-  { pct: 50, label: "50%" },
-  { pct: 100, label: "100%" },
-];
+// Paliers affiches tant qu'aucun warmup n'a tourne
+const DEFAULT_STAGE_PERCENTS = [1, 5, 10, 25, 50, 100];
 
 const ERROR_THRESHOLD_WARNING = 2;
 const ERROR_THRESHOLD_DANGER = 5;
@@ -25,38 +19,56 @@ function getStageIcon(errorRate, isCompleted, isActive) {
   return "\u2714"; // checkmark
 }
 
+function toCount(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+// Le backend (POST /migration/run, mode warmup) emet par palier :
+// stage_index, stage_percent, contacts, success, failed, error_rate,
+// duration_seconds et status (pending/running/completed/failed/skipped/stopped).
+function readStage(raw, fallbackPercent) {
+  const status = raw?.status || "pending";
+  const total = toCount(raw?.contacts);
+  const success = toCount(raw?.success);
+  const errors = toCount(raw?.failed);
+  const processed = success + errors;
+  const isCompleted = status === "completed" || status === "failed" || status === "stopped" || status === "skipped";
+  const isActive = status === "running";
+  const percent = toCount(raw?.stage_percent) || fallbackPercent;
+
+  return {
+    pct: percent,
+    label: `${percent}%`,
+    status,
+    total,
+    success,
+    errors,
+    processed,
+    duration: toCount(raw?.duration_seconds),
+    errorRate: toCount(raw?.error_rate),
+    isCompleted,
+    isActive,
+    progressPct: total > 0 ? Math.round((processed / total) * 100) : (isCompleted ? 100 : 0),
+  };
+}
+
 export default function WarmupMonitor({ warmupData }) {
-  const stages = warmupData?.stages || [];
-  const currentStageIndex = warmupData?.current_stage_index ?? -1;
+  const stages = Array.isArray(warmupData?.stages) ? warmupData.stages : [];
+  const stopReason = warmupData?.stop_reason || null;
+  const totalContacts = toCount(warmupData?.total_contacts);
+  const totalSuccess = toCount(warmupData?.total_success);
+  const totalFailed = toCount(warmupData?.total_failed);
 
-  // Map warmup stage data to our display stages
-  const displayStages = WARMUP_STAGES.map((ws, i) => {
-    const stageData = stages[i] || {};
-    const isCompleted = i < currentStageIndex || (i === currentStageIndex && stageData.completed);
-    const isActive = i === currentStageIndex && !stageData.completed;
-    const errorRate = stageData.error_rate ?? 0;
-    const processed = stageData.processed || 0;
-    const total = stageData.total || 0;
-    const success = stageData.success || 0;
-    const errors = stageData.errors || 0;
-    const progressPct = total > 0 ? Math.round((processed / total) * 100) : (isCompleted ? 100 : 0);
-
-    return {
-      ...ws,
-      isCompleted,
-      isActive,
-      errorRate,
-      processed,
-      total,
-      success,
-      errors,
-      progressPct,
-    };
-  });
+  // Les paliers reellement executes priment sur la liste par defaut
+  const displayStages = stages.length > 0
+    ? stages.map((raw, i) => readStage(raw, DEFAULT_STAGE_PERCENTS[i] ?? 0))
+    : DEFAULT_STAGE_PERCENTS.map((pct) => readStage(null, pct));
 
   // Overall progress
   const completedCount = displayStages.filter((s) => s.isCompleted).length;
-  const overallPct = Math.round((completedCount / displayStages.length) * 100);
+  const overallPct = displayStages.length > 0
+    ? Math.round((completedCount / displayStages.length) * 100)
+    : 0;
 
   return (
     <div className="card">
@@ -75,6 +87,28 @@ export default function WarmupMonitor({ warmupData }) {
             {completedCount}/{displayStages.length} paliers
           </span>
         </div>
+
+        {/* Resume global */}
+        {stages.length > 0 && (
+          <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginBottom: 12 }}>
+            {totalSuccess} contacts migres et {totalFailed} en erreur sur {totalContacts} au total
+          </div>
+        )}
+
+        {/* Arret automatique ou manuel */}
+        {stopReason && (
+          <div style={{
+            background: "rgba(245, 158, 11, 0.08)",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            borderRadius: "var(--radius-md)",
+            padding: "10px 14px",
+            marginBottom: 16,
+          }}>
+            <span className="text-sm font-semibold" style={{ color: "#d97706" }}>
+              Warmup interrompu : {stopReason}
+            </span>
+          </div>
+        )}
 
         {/* Overall progress bar */}
         <div style={{ marginBottom: 20 }}>
@@ -152,6 +186,14 @@ export default function WarmupMonitor({ warmupData }) {
                 {(stage.isCompleted || stage.isActive) && stage.total > 0 && (
                   <div className="text-xs text-muted" style={{ marginTop: 2 }}>
                     {stage.success}&#10003; {stage.errors}&#10007; / {stage.total}
+                    {stage.duration > 0 && ` - ${stage.duration}s`}
+                  </div>
+                )}
+
+                {/* Palier sans contact supplementaire */}
+                {stage.status === "skipped" && (
+                  <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                    Deja couvert
                   </div>
                 )}
 

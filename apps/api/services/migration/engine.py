@@ -14,6 +14,7 @@ from services.migration.connectors.base import BaseConnector
 from services.migration.connectors.brevo import BrevoConnector
 from services.migration.connectors.demo import DemoConnector
 from services.migration.connectors.salesforce_mc import SalesforceMarketingCloudConnector
+from services.migration.connectors.sfmc_demo import SfmcDemoConnector
 from services.migration.connectors.csv_connector import CsvConnector
 from services.migration.exporters.braze import BrazeExporter, deduplicate_contacts_by_email
 from services.migration.mappers.base_mapper import BaseMapper
@@ -29,6 +30,7 @@ CONNECTOR_REGISTRY: dict[str, type[BaseConnector]] = {
     "brevo": BrevoConnector,
     "salesforce_mc": SalesforceMarketingCloudConnector,
     "sfmc": SalesforceMarketingCloudConnector,  # alias frontend
+    "sfmc_demo": SfmcDemoConnector,  # jeu de demonstration SFMC (fixtures locales)
     "csv": CsvConnector,
 }
 
@@ -37,6 +39,7 @@ MAPPER_REGISTRY: dict[str, type[BaseMapper]] = {
     "brevo": BrevoMapper,
     "salesforce_mc": SalesforceMarketingCloudMapper,
     "sfmc": SalesforceMarketingCloudMapper,  # alias frontend
+    "sfmc_demo": SalesforceMarketingCloudMapper,  # le mapper SFMC reel tourne sur la demo
     "csv": CsvMapper,
 }
 

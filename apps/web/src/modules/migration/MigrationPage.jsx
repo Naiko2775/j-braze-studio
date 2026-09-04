@@ -23,6 +23,9 @@ export default function MigrationPage() {
 
   const isConnected = connectionStatus?.success === true || connectionStatus?.source === true;
   const hasPreview = previewData !== null;
+  const warmupResult = Array.isArray(migrationJob?.result?.stages)
+    ? migrationJob.result
+    : null;
 
   const canGoToPreview = isConnected;
   const canGoToMigration = isConnected && hasPreview;
@@ -168,10 +171,11 @@ export default function MigrationPage() {
             onMigrationJob={setMigrationJob}
           />
 
-          {/* Warmup monitor */}
-          {migrationJob && (
+          {/* Warmup monitor : POST /migration/run renvoie {job_id, status, result},
+              et seul le mode warmup remplit result.stages */}
+          {warmupResult && (
             <div style={{ marginTop: 16 }}>
-              <WarmupMonitor warmupData={migrationJob.warmup} />
+              <WarmupMonitor warmupData={warmupResult} />
             </div>
           )}
 

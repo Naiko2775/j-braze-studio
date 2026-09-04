@@ -3,10 +3,14 @@ import { useApi } from "../../shared/hooks/useApi";
 
 const PLATFORMS = [
   { id: "demo", label: "Demo (donnees fictives)" },
+  { id: "sfmc_demo", label: "Salesforce Marketing Cloud - demo (donnees fictives)" },
   { id: "brevo", label: "Brevo (Sendinblue)" },
   { id: "sfmc", label: "Salesforce Marketing Cloud" },
   { id: "csv", label: "CSV / Fichier plat" },
 ];
+
+// Plateformes sans identifiants : donnees locales, dry run force cote serveur
+const DEMO_PLATFORMS = ["demo", "sfmc_demo"];
 
 const CREDENTIAL_FIELDS = {
   brevo: [
@@ -21,6 +25,7 @@ const CREDENTIAL_FIELDS = {
     { key: "file", label: "Fichier CSV", type: "file", accept: ".csv,.tsv,.txt" },
   ],
   demo: [],
+  sfmc_demo: [],
 };
 
 export default function PlatformConfig({ platform, onPlatformChange, credentials, onCredentialsChange, connectionStatus, onConnectionStatusChange }) {
@@ -52,7 +57,7 @@ export default function PlatformConfig({ platform, onPlatformChange, credentials
   };
 
   const hasCredentials = () => {
-    if (platform === "demo") return true;
+    if (DEMO_PLATFORMS.includes(platform)) return true;
     if (platform === "csv") return !!credentials.file_content;
     const required = fields.filter((f) => f.type !== "file").map((f) => f.key);
     return required.every((k) => credentials[k]?.trim());
@@ -113,7 +118,7 @@ export default function PlatformConfig({ platform, onPlatformChange, credentials
         </div>
 
         {/* Demo badge */}
-        {platform === "demo" && (
+        {DEMO_PLATFORMS.includes(platform) && (
           <div style={{
             background: "var(--color-red-light)",
             border: "1px solid rgba(240, 10, 10, 0.15)",
@@ -126,7 +131,9 @@ export default function PlatformConfig({ platform, onPlatformChange, credentials
           }}>
             <span style={{ fontSize: "1.2rem" }}>&#9888;</span>
             <span className="text-sm" style={{ color: "var(--color-red)", fontWeight: 600 }}>
-              Mode demonstration : donnees fictives, aucune connexion requise
+              {platform === "sfmc_demo"
+                ? "Jeu de demonstration Salesforce Marketing Cloud : donnees fictives (aucune personne reelle), aucune connexion requise, dry run force cote serveur."
+                : "Mode demonstration : donnees fictives, aucune connexion requise"}
             </span>
           </div>
         )}

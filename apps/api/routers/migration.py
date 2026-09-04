@@ -1,5 +1,7 @@
 """Endpoints pour le module Migration."""
+import logging
 import os
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,10 +12,47 @@ from models.db import get_db
 from models.migration_job import MigrationJob
 from services.migration.engine import MigrationEngine
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/migration", tags=["migration"])
 
 # Store des jobs en cours pour le stop
 _running_jobs: dict[str, dict] = {}
+
+# Plateformes de demonstration : donnees fictives, jamais d'ecriture reelle vers Braze
+DEMO_PLATFORMS = {"demo", "sfmc_demo"}
+
+# Alias envoyes par le frontend -> identifiant de connecteur
+PLATFORM_ALIASES = {"sfmc": "salesforce_mc"}
+
+
+def _resolve_platform(platform: str) -> str:
+    """Resout les alias de plateforme (ex: sfmc -> salesforce_mc)."""
+    return PLATFORM_ALIASES.get(platform, platform)
+
+
+def _is_demo_platform(platform: str) -> bool:
+    return _resolve_platform(platform) in DEMO_PLATFORMS
+
+
+def _safe_fetch(fetcher, label: str) -> list:
+    """Recupere une collection optionnelle sans casser l'apercu.
+
+    Une source peut n'exposer que les contacts : dans ce cas segments et
+    templates remontent vides plutot que de faire echouer tout l'apercu.
+    """
+    try:
+        return fetcher() or []
+    except Exception as e:
+        logger.warning(f"Preview: impossible de recuperer {label}: {e}")
+        return []
+
+
+def _contact_sample(contact) -> dict:
+    """Serialise un contact pour le tableau d'apercu."""
+    data = contact.model_dump(mode="json")
+    data["custom_attributes_count"] = len(contact.custom_attributes)
+    return data
 
 
 def _default_braze_config() -> dict:
@@ -25,7 +64,9 @@ def _default_braze_config() -> dict:
 
 class PreviewRequest(BaseModel):
     credentials: dict = {}
-    limit: int = 10
+    # Apercu volontairement large : le but est de montrer la volumetrie reelle
+    limit: int = 500
+    sample_size: int = 8
     deduplicate_by_email: bool = False
 
 
@@ -82,12 +123,34 @@ def list_platforms():
         {"id": "salesforce_mc", "name": "Salesforce MC", "description": "Salesforce Marketing Cloud"},
         {"id": "csv", "name": "CSV", "description": "Import depuis fichier CSV"},
         {"id": "demo", "name": "Demo", "description": "Donnees de demonstration"},
+        {
+            "id": "sfmc_demo",
+            "name": "Salesforce MC (demo)",
+            "description": "Jeu de demonstration SFMC : donnees fictives, dry run force",
+            "is_demo": True,
+        },
     ]
 
 
 @router.post("/test-connection")
 def test_connection(req: TestConnectionRequest):
     """Tester la connexion source + Braze."""
+    from services.migration.engine import CONNECTOR_REGISTRY
+
+    resolved_platform = _resolve_platform(req.platform)
+    if resolved_platform not in CONNECTOR_REGISTRY:
+        raise HTTPException(status_code=400, detail=f"Unknown platform: {req.platform}")
+
+    if resolved_platform in DEMO_PLATFORMS:
+        # Pas d'appel reseau : les donnees sont locales et rien n'est ecrit dans Braze
+        connector = CONNECTOR_REGISTRY[resolved_platform](dict(req.source_config or {}))
+        return {
+            "source": connector.test_connection(),
+            "braze": True,
+            "is_demo": True,
+            "message": "Mode demonstration : donnees fictives, dry run force",
+        }
+
     try:
         engine = MigrationEngine(
             source_platform=req.platform,
@@ -101,42 +164,71 @@ def test_connection(req: TestConnectionRequest):
 
 @router.post("/preview/{platform}")
 def preview_data(platform: str, req: PreviewRequest | None = None):
-    """Apercu des donnees avant migration."""
+    """Apercu des donnees avant migration : contacts, segments, templates."""
+    from services.migration.engine import CONNECTOR_REGISTRY
+
     if req is None:
         req = PreviewRequest()
-    limit = req.limit
-    credentials = req.credentials
 
-    # Resolve sfmc alias
-    resolved_platform = "salesforce_mc" if platform == "sfmc" else platform
-
-    if resolved_platform == "demo":
-        from services.migration.connectors.demo import DemoConnector
-        connector = DemoConnector({"contact_count": limit})
-        contacts = connector.fetch_contacts(limit=limit)
-        return {
-            "contacts_count": len(contacts),
-            "sample": [c.model_dump() for c in contacts[:5]],
-        }
-
-    # For non-demo platforms, use provided credentials
-    from services.migration.engine import CONNECTOR_REGISTRY
+    resolved_platform = _resolve_platform(platform)
     if resolved_platform not in CONNECTOR_REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
+
+    limit = max(1, req.limit)
+    sample_size = max(1, req.sample_size)
+
+    config = dict(req.credentials or {})
+    if resolved_platform == "demo":
+        # Le connecteur demo genere autant de contacts que demande
+        config["contact_count"] = limit
+
     try:
-        connector = CONNECTOR_REGISTRY[resolved_platform](credentials)
+        connector = CONNECTOR_REGISTRY[resolved_platform](config)
         contacts = connector.fetch_contacts(limit=limit)
-        return {
-            "contacts_count": len(contacts),
-            "sample": [c.model_dump() for c in contacts[:5]],
-        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    segments = _safe_fetch(connector.fetch_segments, "segments")
+    templates = _safe_fetch(connector.fetch_templates, "templates")
+
+    total_attributes = sum(len(c.custom_attributes) for c in contacts)
+    avg_attributes = round(total_attributes / len(contacts), 1) if contacts else 0
+
+    response = {
+        "platform": resolved_platform,
+        "contacts_count": len(contacts),
+        "segment_count": len(segments),
+        "template_count": len(templates),
+        "avg_attributes": avg_attributes,
+        "unsubscribed_count": sum(
+            1 for c in contacts if c.email_subscribe != "subscribed"
+        ),
+        "is_demo": resolved_platform in DEMO_PLATFORMS,
+        "sample": [_contact_sample(c) for c in contacts[:sample_size]],
+    }
+
+    if req.deduplicate_by_email:
+        from services.migration.exporters.braze import deduplicate_contacts_by_email
+        unique_count = len(deduplicate_contacts_by_email(contacts))
+        response["deduplicated_count"] = unique_count
+        response["duplicates_removed"] = len(contacts) - unique_count
+
+    # Metadonnees optionnelles exposees par certains connecteurs (Data Extensions...)
+    describe = getattr(connector, "describe_source", None)
+    if callable(describe):
+        try:
+            response["source_details"] = describe()
+        except Exception as e:
+            logger.warning(f"Preview: describe_source a echoue: {e}")
+
+    return response
 
 
 @router.post("/run")
 def run_migration(req: RunMigrationRequest, db: Session = Depends(get_db)):
     """Lancer une migration."""
+    is_demo = _is_demo_platform(req.platform)
+
     # Creer le job en BDD
     job = MigrationJob(
         project_id=req.project_id,
@@ -148,6 +240,7 @@ def run_migration(req: RunMigrationRequest, db: Session = Depends(get_db)):
             "contact_limit": req.contact_limit,
             "deduplicate_by_email": req.deduplicate_by_email,
             "project_name": req.project_name,
+            "forced_dry_run": is_demo,
         },
         status="running",
         progress={"stage": "initializing"},
@@ -158,9 +251,15 @@ def run_migration(req: RunMigrationRequest, db: Session = Depends(get_db)):
     db.refresh(job)
 
     try:
-        braze_config = req.braze_config.copy()
+        braze_config = dict(req.braze_config or {})
         if req.mode == "dry_run":
             braze_config["dry_run"] = True
+        # SECURITE : une plateforme de demonstration ne doit jamais ecrire dans
+        # Braze, meme si BRAZE_API_KEY pointe vers un workspace reel.
+        if is_demo:
+            braze_config["dry_run"] = True
+
+        started = time.monotonic()
 
         engine = MigrationEngine(
             source_platform=req.platform,
@@ -182,13 +281,17 @@ def run_migration(req: RunMigrationRequest, db: Session = Depends(get_db)):
                 "total_contacts": result.total_contacts,
                 "total_success": result.total_success,
                 "total_failed": result.total_failed,
+                "stopped_at_stage": result.stopped_at_stage,
+                "stop_reason": result.stop_reason,
                 "stages": [
                     {
+                        "stage_index": s.stage_index,
                         "stage_percent": s.stage_percent,
                         "contacts": s.contacts_in_stage,
                         "success": s.success,
                         "failed": s.failed,
                         "error_rate": s.error_rate,
+                        "duration_seconds": s.duration_seconds,
                         "status": s.status,
                     }
                     for s in result.stages
@@ -201,6 +304,12 @@ def run_migration(req: RunMigrationRequest, db: Session = Depends(get_db)):
                 deduplicate_by_email=req.deduplicate_by_email,
             )
             job_result = result
+
+        # Metadonnees communes aux deux modes, lues par le frontend
+        job_result["mode"] = req.mode
+        job_result["dry_run"] = bool(braze_config.get("dry_run"))
+        job_result["forced_dry_run"] = is_demo
+        job_result["elapsed_seconds"] = round(time.monotonic() - started, 2)
 
         job.status = "completed"
         job.result = job_result

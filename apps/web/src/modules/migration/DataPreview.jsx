@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { useApi } from "../../shared/hooks/useApi";
 
+// L'apercu charge un echantillon large : la volumetrie affichee doit refleter
+// la source, pas la limite par defaut du backend.
+const PREVIEW_LIMIT = 500;
+const PREVIEW_SAMPLE_SIZE = 8;
+
 function formatNumber(n) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -16,7 +21,12 @@ export default function DataPreview({ platform, credentials, onPreviewData }) {
     try {
       const result = await call(`/migration/preview/${platform}`, {
         method: "POST",
-        body: JSON.stringify({ credentials, deduplicate_by_email: deduplicate }),
+        body: JSON.stringify({
+          credentials,
+          deduplicate_by_email: deduplicate,
+          limit: PREVIEW_LIMIT,
+          sample_size: PREVIEW_SAMPLE_SIZE,
+        }),
       });
       setLoaded(true);
       if (onPreviewData) onPreviewData({ ...result, deduplicate_by_email: deduplicate });
@@ -38,7 +48,11 @@ export default function DataPreview({ platform, credentials, onPreviewData }) {
   const segmentCount = data?.segment_count || 0;
   const templateCount = data?.template_count || 0;
   const avgAttributes = data?.avg_attributes || 0;
-  const dataPoints = contactCount * avgAttributes;
+  const unsubscribedCount = data?.unsubscribed_count || 0;
+  const duplicatesRemoved = data?.duplicates_removed || 0;
+  const sourceDetails = data?.source_details || null;
+  const dataExtensions = sourceDetails?.data_extensions || [];
+  const dataPoints = Math.round(contactCount * avgAttributes);
 
   return (
     <div className="card">
@@ -98,6 +112,34 @@ export default function DataPreview({ platform, credentials, onPreviewData }) {
           </div>
         )}
 
+        {loaded && data && sourceDetails?.is_demo && (
+          <div style={{
+            background: "rgba(59, 130, 246, 0.06)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: "var(--radius-md)",
+            padding: "12px 16px",
+            marginBottom: 16,
+          }}>
+            <div className="text-sm font-semibold" style={{ color: "#2563eb", marginBottom: 4 }}>
+              Jeu de donnees de demonstration
+            </div>
+            <div className="text-xs" style={{ color: "var(--color-text)" }}>
+              {sourceDetails.notice}
+            </div>
+            {dataExtensions.length > 0 && (
+              <div className="text-xs text-muted" style={{ marginTop: 6 }}>
+                Data Extensions :{" "}
+                {dataExtensions.map((de, i) => (
+                  <span key={de.key}>
+                    {i > 0 && " - "}
+                    <span className="font-mono">{de.key}</span> ({formatNumber(de.rows)})
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {loaded && data && (
           <>
             {/* Stat counters */}
@@ -106,6 +148,7 @@ export default function DataPreview({ platform, credentials, onPreviewData }) {
               <StatCard label="Segments" value={String(segmentCount)} color="var(--color-navy)" />
               <StatCard label="Templates" value={String(templateCount)} color="var(--color-navy)" />
               <StatCard label="Attr. moy. / contact" value={String(avgAttributes)} color="var(--color-navy)" />
+              <StatCard label="Desabonnes" value={formatNumber(unsubscribedCount)} color="var(--color-navy)" />
             </div>
 
             {/* Data points estimation alert */}
@@ -132,7 +175,9 @@ export default function DataPreview({ platform, credentials, onPreviewData }) {
                 </div>
                 <div className="text-xs text-muted" style={{ marginTop: 4 }}>
                   Chaque attribut ecrit via /users/track consomme 1 data point Braze.
-                  {deduplicate && " La deduplication par email reduira le nombre reel."}
+                  {deduplicate && duplicatesRemoved > 0
+                    ? ` La deduplication par email retire ${duplicatesRemoved} doublons.`
+                    : deduplicate ? " Aucun doublon d'email detecte sur cet echantillon." : ""}
                   {" "}Utilisez le mode Dry Run pour valider sans consommer.
                 </div>
               </div>
