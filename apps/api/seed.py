@@ -33,7 +33,7 @@ ANALYSES = [
     {
         "project_name": "Fnac",
         "use_case": "Programme de bienvenue multi-canal",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=12),
         "result": {
             "use_case_analysis": [
@@ -118,7 +118,7 @@ ANALYSES = [
     {
         "project_name": "Decathlon",
         "use_case": "Relance panier abandonne e-commerce",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=9, hours=6),
         "result": {
             "use_case_analysis": [
@@ -191,7 +191,7 @@ ANALYSES = [
     {
         "project_name": "Sephora",
         "use_case": "Programme de fidelite 3 niveaux",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=7, hours=3),
         "result": {
             "use_case_analysis": [
@@ -260,7 +260,7 @@ ANALYSES = [
     {
         "project_name": "BNP Paribas",
         "use_case": "Campagne de reactivation clients inactifs",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=5),
         "result": {
             "use_case_analysis": [
@@ -329,7 +329,7 @@ ANALYSES = [
     {
         "project_name": "Leroy Merlin",
         "use_case": "Notifications transactionnelles post-achat",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=2, hours=8),
         "result": {
             "use_case_analysis": [
@@ -414,7 +414,7 @@ GENERATIONS = [
         "brief": "Banniere hero pour les soldes d'ete avec -50% sur une selection de produits tech et culture. Ton premium et urgent. Couleurs Fnac jaune/noir.",
         "template_type": "hero_banner",
         "channel": "email",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=11, hours=4),
         "result": {
             "template": "hero_banner",
@@ -441,7 +441,7 @@ GENERATIONS = [
         "brief": "Product card pour la nouvelle collection automne/hiver, mise en avant du coffret 'Les Indispensables'. Prix 89EUR au lieu de 120EUR. Badge 'Nouveaute'. Ton elegant et feminin.",
         "template_type": "product_card",
         "channel": "email",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=8, hours=2),
         "result": {
             "template": "product_card",
@@ -471,7 +471,7 @@ GENERATIONS = [
         "brief": "Countdown pour une flash sale de 24h sur les equipements de running. Urgence maximale. Couleurs Decathlon bleu/blanc.",
         "template_type": "countdown",
         "channel": "in-app",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=6),
         "result": {
             "template": "countdown",
@@ -498,7 +498,7 @@ GENERATIONS = [
         "brief": "CTA simple de bienvenue pour les nouveaux clients banque en ligne. Offre -15% sur les frais de tenue de compte la premiere annee. Ton professionnel et rassurant.",
         "template_type": "cta_simple",
         "channel": "email",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=4, hours=5),
         "result": {
             "template": "cta_simple",
@@ -523,7 +523,7 @@ GENERATIONS = [
         "brief": "Testimonial banniere avec un avis client sur un projet de renovation de cuisine. Social proof pour inciter a prendre rendez-vous en magasin. Ton inspirant.",
         "template_type": "testimonial",
         "channel": "content-card",
-        "model_used": "claude-sonnet-4-20250514",
+        "model_used": "claude-opus-5",
         "created_at": _ago(days=1, hours=6),
         "result": {
             "template": "testimonial",
@@ -733,7 +733,7 @@ MIGRATION_JOBS = [
 # =========================================================================
 
 APP_CONFIGS = [
-    {"key": "default_model", "value": "claude-sonnet-4-20250514"},
+    {"key": "default_model", "value": "claude-opus-5"},
     {"key": "braze_api_instance", "value": "EU-01"},
     {"key": "app_version", "value": "1.0.0"},
 ]

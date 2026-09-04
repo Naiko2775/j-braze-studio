@@ -316,7 +316,7 @@ class TestGeneratorService:
         finally:
             _restore_api_key(old_key)
 
-    @patch("services.claude_client.get_default_model", return_value="claude-sonnet-4-20250514")
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
     @patch("services.claude_client.get_claude_client")
     def test_generate_banner_calls_claude(self, mock_client_fn, mock_model):
         """Avec une cle API, appelle Claude et parse le JSON."""
@@ -330,16 +330,16 @@ class TestGeneratorService:
 
             assert result["template"] == "hero_banner"
             assert result["params"]["headline"] == "Test headline"
-            assert result["model_used"] == "claude-sonnet-4-20250514"
+            assert result["model_used"] == "claude-opus-5"
 
             mock_client.messages.create.assert_called_once()
             call_kwargs = mock_client.messages.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 4000
+            assert call_kwargs["max_tokens"] == 16384
             assert "hero_banner" in call_kwargs["messages"][0]["content"]
         finally:
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
-    @patch("services.claude_client.get_default_model", return_value="claude-sonnet-4-20250514")
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
     @patch("services.claude_client.get_claude_client")
     def test_generate_banner_invalid_json_raises(self, mock_client_fn, mock_model):
         """Si Claude retourne du non-JSON, leve une ValueError."""
@@ -361,7 +361,7 @@ class TestGeneratorService:
         finally:
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
-    @patch("services.claude_client.get_default_model", return_value="claude-sonnet-4-20250514")
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
     @patch("services.claude_client.get_claude_client")
     def test_generate_with_channel(self, mock_client_fn, mock_model):
         """Le canal est ajoute au message utilisateur."""
@@ -524,7 +524,7 @@ class TestLiquidRouter:
         response = client.get("/api/liquid/history/nonexistent-id")
         assert response.status_code == 404
 
-    @patch("services.claude_client.get_default_model", return_value="claude-sonnet-4-20250514")
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
     @patch("services.claude_client.get_claude_client")
     def test_generate_with_claude_mock(self, mock_client_fn, mock_model):
         """POST /generate avec mock Claude complet."""
@@ -574,3 +574,244 @@ class TestLiquidRouter:
             assert items[1]["brief"] == "Premier brief"
         finally:
             _restore_api_key(old_key)
+
+
+# ---------------------------------------------------------------------------
+# Extraction des blocs de reponse Claude
+#
+# Regressions de production : Opus 5 reflechit par defaut, donc response.content
+# commence souvent par un ThinkingBlock (sans attribut .text) et les tokens de
+# reflexion sont decomptes de max_tokens. Le generator Liquid et l'analyseur
+# Data Model partagent exactement le meme contrat d'extraction, ils sont donc
+# verifies ensemble ici.
+# ---------------------------------------------------------------------------
+
+SAMPLE_ANALYSIS_RESULT = {
+    "use_case_analysis": [
+        {
+            "use_case": "Relance panier abandonne",
+            "description": "Canvas action-based declenche sur added_to_cart.",
+            "required_data": [],
+            "segments": [],
+            "messaging": {"channels": ["email"], "trigger_type": "action_based"},
+        }
+    ],
+    "data_hierarchy": [],
+    "mermaid_diagram": "graph TD\n    UP[User Profile]",
+}
+
+
+def _thinking_block():
+    """Bloc de reflexion Opus 5 : type 'thinking', SANS attribut .text.
+
+    Le spec restreint reproduit fidelement le bug : tout acces a .text leve
+    une AttributeError, comme sur un vrai ThinkingBlock du SDK.
+    """
+    block = MagicMock(spec=["type", "thinking"])
+    block.type = "thinking"
+    block.thinking = "Reflexion interne du modele"
+    return block
+
+
+def _text_block(text: str):
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
+    return block
+
+
+def _make_response(blocks, stop_reason="end_turn"):
+    response = MagicMock()
+    response.content = blocks
+    response.stop_reason = stop_reason
+    return response
+
+
+def _client_returning(response):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = response
+    return mock_client
+
+
+def _split_in_two(payload: str) -> list:
+    """Coupe un JSON en deux blocs de texte pour forcer la concatenation."""
+    half = len(payload) // 2
+    return [_text_block(payload[:half]), _text_block(payload[half:])]
+
+
+class TestClaudeResponseExtraction:
+
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_concatenates_all_text_blocks(self, mock_client_fn, mock_model):
+        """Le generator concatene TOUS les blocs texte et ignore la reflexion."""
+        payload = json.dumps(SAMPLE_CLAUDE_RESULT)
+        blocks = [_thinking_block()] + _split_in_two(payload)
+        mock_client_fn.return_value = _client_returning(_make_response(blocks))
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.liquid.generator import generate_banner
+            result = generate_banner("Banniere soldes VIP", template_type="hero_banner")
+
+            # Un seul bloc lu (l'ancien content[0].text) donnerait un JSON tronque
+            assert result["template"] == "hero_banner"
+            assert result["params"]["headline"] == "Test headline"
+            assert len(result["ab_variants"]) == 2
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_thinking_block_first_does_not_raise_attribute_error(
+        self, mock_client_fn, mock_model
+    ):
+        """content[0] est un bloc thinking : aucune AttributeError ne remonte."""
+        blocks = [_thinking_block(), _text_block(json.dumps(SAMPLE_CLAUDE_RESULT))]
+        mock_client_fn.return_value = _client_returning(_make_response(blocks))
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.liquid.generator import generate_banner
+            result = generate_banner("Test brief")
+            assert result["template"] == "hero_banner"
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_only_thinking_blocks_raises_value_error(
+        self, mock_client_fn, mock_model
+    ):
+        """Reponse sans aucun bloc texte : ValueError explicite, pas de crash."""
+        mock_client_fn.return_value = _client_returning(
+            _make_response([_thinking_block()])
+        )
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.liquid.generator import generate_banner
+            with pytest.raises(ValueError):
+                generate_banner("Test brief")
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_raises_on_max_tokens_truncation(self, mock_client_fn, mock_model):
+        """stop_reason == max_tokens : erreur de troncature, pas un JSONDecodeError."""
+        truncated = json.dumps(SAMPLE_CLAUDE_RESULT)[:120]
+        mock_client_fn.return_value = _client_returning(
+            _make_response([_text_block(truncated)], stop_reason="max_tokens")
+        )
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.liquid.generator import generate_banner
+            with pytest.raises(ValueError, match="tronquee"):
+                generate_banner("Brief tres long")
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_uses_opus_5_by_default(self, mock_client_fn, monkeypatch):
+        """Sans override, le generator appelle claude-opus-5."""
+        monkeypatch.delenv("CLAUDE_DEFAULT_MODEL", raising=False)
+        mock_client = _client_returning(
+            _make_response([_text_block(json.dumps(SAMPLE_CLAUDE_RESULT))])
+        )
+        mock_client_fn.return_value = mock_client
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-fake-key")
+        from services.liquid.generator import generate_banner
+        result = generate_banner("Test brief")
+
+        assert mock_client.messages.create.call_args.kwargs["model"] == "claude-opus-5"
+        assert result["model_used"] == "claude-opus-5"
+
+    @patch("services.claude_client.get_analysis_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_analyzer_concatenates_all_text_blocks(self, mock_client_fn, mock_model):
+        """L'analyseur Data Model applique la meme extraction que le generator."""
+        payload = json.dumps(SAMPLE_ANALYSIS_RESULT)
+        blocks = [_thinking_block()] + _split_in_two(payload)
+        mock_client_fn.return_value = _client_returning(_make_response(blocks))
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.data_model.analyzer import analyze_use_cases
+            result = analyze_use_cases(["Relance panier abandonne"])
+
+            assert "error" not in result
+            assert len(result["use_case_analysis"]) == 1
+            assert result["use_case_analysis"][0]["use_case"] == "Relance panier abandonne"
+            assert result["model_used"] == "claude-opus-5"
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_analysis_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_analyzer_only_thinking_blocks_returns_error_payload(
+        self, mock_client_fn, mock_model
+    ):
+        """Aucun bloc texte : payload d'erreur lisible avec le stop_reason."""
+        mock_client_fn.return_value = _client_returning(
+            _make_response([_thinking_block()], stop_reason="max_tokens")
+        )
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.data_model.analyzer import analyze_use_cases
+            result = analyze_use_cases(["Use case quelconque"])
+
+            assert "error" in result
+            assert "stop_reason=max_tokens" in result["raw_response"]
+            assert result["model_used"] == "claude-opus-5"
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    @patch("services.claude_client.get_claude_client")
+    def test_analyzer_uses_opus_5_by_default(self, mock_client_fn, monkeypatch):
+        """Sans override, l'analyseur appelle claude-opus-5."""
+        monkeypatch.delenv("CLAUDE_ANALYSIS_MODEL", raising=False)
+        mock_client = _client_returning(
+            _make_response([_text_block(json.dumps(SAMPLE_ANALYSIS_RESULT))])
+        )
+        mock_client_fn.return_value = mock_client
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-fake-key")
+        from services.data_model.analyzer import analyze_use_cases
+        result = analyze_use_cases(["Relance panier abandonne"])
+
+        assert mock_client.messages.create.call_args.kwargs["model"] == "claude-opus-5"
+        assert result["model_used"] == "claude-opus-5"
+
+    def test_default_models_are_opus_5(self, monkeypatch):
+        """Les deux modules partagent le meme defaut, surchargeable par env."""
+        from services.claude_client import get_analysis_model, get_default_model
+
+        monkeypatch.delenv("CLAUDE_DEFAULT_MODEL", raising=False)
+        monkeypatch.delenv("CLAUDE_ANALYSIS_MODEL", raising=False)
+        assert get_default_model() == "claude-opus-5"
+        assert get_analysis_model() == "claude-opus-5"
+
+        monkeypatch.setenv("CLAUDE_ANALYSIS_MODEL", "claude-haiku-4-5")
+        assert get_analysis_model() == "claude-haiku-4-5"
+        assert get_default_model() == "claude-opus-5"
+
+    @patch("services.claude_client.get_default_model", return_value="claude-opus-5")
+    @patch("services.claude_client.get_claude_client")
+    def test_generator_budget_covers_thinking_tokens(self, mock_client_fn, mock_model):
+        """max_tokens doit rester large : la reflexion est decomptee du budget."""
+        mock_client = _client_returning(
+            _make_response([_text_block(json.dumps(SAMPLE_CLAUDE_RESULT))])
+        )
+        mock_client_fn.return_value = mock_client
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-fake-key"
+        try:
+            from services.liquid.generator import generate_banner
+            generate_banner("Test brief")
+            assert mock_client.messages.create.call_args.kwargs["max_tokens"] == 16384
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
