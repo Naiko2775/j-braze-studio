@@ -138,7 +138,19 @@ def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
         messages=[{"role": "user", "content": user_message}],
     )
 
-    raw_text = response.content[0].text.strip()
+    # response.content melange les types de blocs : avec la reflexion adaptative
+    # d'Opus 5, content[0] est un ThinkingBlock (sans attribut .text) des que
+    # Claude decide de reflechir -- d'ou des 500 intermittents. On concatene les
+    # seuls blocs de texte, comme le fait deja services/liquid/generator.py.
+    raw_text = "".join(
+        block.text for block in response.content if block.type == "text"
+    ).strip()
+
+    if not raw_text:
+        return {
+            "error": "La reponse Claude ne contient aucun bloc de texte",
+            "raw_response": f"stop_reason={response.stop_reason}",
+        }
 
     # Nettoyer le JSON si entoure de ```json ... ```
     if raw_text.startswith("```"):
