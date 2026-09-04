@@ -56,6 +56,14 @@ function projectName(entry) {
   return entry.project_name || "—";
 }
 
+/* Libelle d'une entree de catalogue (charte de marque / ton de voix).
+   La valeur stockee dans result peut etre l'objet resolu ou un identifiant. */
+function catalogLabel(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.label || value.id || null;
+}
+
 function entryDate(entry) {
   return entry.created_at || entry.started_at || null;
 }
@@ -152,6 +160,25 @@ function DetailModal({ entry, tab, onClose }) {
               <div>
                 <span className="text-xs text-muted font-semibold" style={{ display: "block" }}>Canal</span>
                 {entry.channel}
+              </div>
+            )}
+            {tab === "generations" && catalogLabel(entry.result?.brand_charter) && (
+              <div>
+                <span className="text-xs text-muted font-semibold" style={{ display: "block" }}>Charte</span>
+                <span className="tag tag-navy" style={{ fontSize: "0.7rem" }}>
+                  {catalogLabel(entry.result.brand_charter)}
+                </span>
+                <span className="text-xs text-muted" style={{ display: "block", marginTop: 2 }}>
+                  approximation non officielle
+                </span>
+              </div>
+            )}
+            {tab === "generations" && catalogLabel(entry.result?.tone_of_voice) && (
+              <div>
+                <span className="text-xs text-muted font-semibold" style={{ display: "block" }}>Ton de voix</span>
+                <span className="tag tag-gray" style={{ fontSize: "0.7rem" }}>
+                  {catalogLabel(entry.result.tone_of_voice)}
+                </span>
               </div>
             )}
           </div>

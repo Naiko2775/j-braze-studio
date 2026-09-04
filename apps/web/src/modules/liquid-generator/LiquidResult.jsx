@@ -3,12 +3,34 @@ import CodeBlock from "../../shared/components/CodeBlock";
 import ExportButton from "../../shared/components/ExportButton";
 import BannerPreview from "./BannerPreview";
 
+/* Mention de moderation portee par le ton de voix selectionne. */
+function moderationMention(result) {
+  const tone = result && typeof result.tone_of_voice === "object" ? result.tone_of_voice : null;
+  return (tone && tone.moderation_message) || null;
+}
+
 /* ── Sous-composants pour chaque onglet ── */
 
 function PreviewTab({ result }) {
   return (
     <div>
       <BannerPreview data={result} />
+
+      {/* Mention legale : le code Liquid genere la porte, la preview doit la
+          montrer aussi, sans quoi l'ecran contredit ce que l'utilisateur copie. */}
+      {moderationMention(result) && (
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: "0.72rem",
+            color: "var(--color-text-muted)",
+            textAlign: "center",
+            fontStyle: "italic",
+          }}
+        >
+          {moderationMention(result)}
+        </p>
+      )}
 
       {/* Notes de personnalisation */}
       {result.personalization_notes && (
@@ -141,9 +163,21 @@ function VariantsTab({ result }) {
   );
 }
 
+/* ── Helper : libelle d'une entree de catalogue (charte / ton) ──
+   La valeur peut etre l'objet resolu cote serveur ou un simple identifiant. */
+function catalogLabel(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.label || value.id || null;
+}
+
 /* ── Composant principal ── */
 
 export default function LiquidResult({ result, onReset }) {
+  const charterLabel = catalogLabel(result.brand_charter);
+  const toneLabel = catalogLabel(result.tone_of_voice);
+  const charterWarning =
+    typeof result.brand_charter === "object" ? result.brand_charter?.avertissement : null;
   const templateLabel = result.template
     ? result.template.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     : "Banniere";
@@ -177,6 +211,22 @@ export default function LiquidResult({ result, onReset }) {
           >
             {templateLabel} generee -- Parcourez les onglets pour explorer les resultats
           </div>
+
+          {/* Charte et ton appliques a cette generation */}
+          {charterLabel && (
+            <span
+              className="tag tag-navy"
+              title={charterWarning || undefined}
+              style={{ fontSize: "0.75rem" }}
+            >
+              Charte : {charterLabel} (approximation non officielle)
+            </span>
+          )}
+          {toneLabel && (
+            <span className="tag tag-gray" style={{ fontSize: "0.75rem" }}>
+              Ton : {toneLabel}
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <ExportButton

@@ -807,3 +807,181 @@ def get_template(name: str) -> dict[str, Any] | None:
     if tpl is None:
         return None
     return {"key": name, "id": name, **tpl}
+
+
+# =============================================================================
+# CHARTES DE MARQUE (catalogue serveur)
+# =============================================================================
+# ATTENTION : ces chartes sont des APPROXIMATIONS PLAUSIBLES reconstituees a
+# partir de l'identite de marque publiquement observable. Ce ne sont PAS les
+# chartes graphiques officielles des marques concernees. Elles servent de
+# demonstration et doivent etre remplacees par la charte reelle fournie par le
+# client avant toute utilisation en production.
+
+CHARTER_DISCLAIMER = (
+    "Approximation non officielle reconstituee a partir de l'identite de marque "
+    "publiquement observable. Ce n'est pas la charte graphique officielle de la "
+    "marque : a remplacer par la charte reelle fournie par le client."
+)
+
+# Contrainte legale commune aux marques d'alcool.
+MODERATION_MESSAGE = (
+    "L'abus d'alcool est dangereux pour la sante. A consommer avec moderation."
+)
+
+BRAND_CHARTERS: dict[str, dict[str, Any]] = {
+    "pernod_ricard_corporate": {
+        "label": "Pernod Ricard (institutionnel)",
+        "description": "Identite corporate du groupe : sobre, elegante, responsable.",
+        "colors": {
+            "primary": "#0A1E3C",
+            "secondary": "#C9A227",
+            "background": "#FFFFFF",
+            "text": "#1A1A1A",
+        },
+        "color_notes": {
+            "primary": "Bleu nuit institutionnel",
+            "secondary": "Or sobre (accents, filets, CTA secondaires)",
+            "background": "Blanc pur",
+            "text": "Gris tres fonce",
+        },
+        "fonts": {
+            "heading": "Sans-serif humaniste et nette",
+            "body": "Sans-serif humaniste et nette, genereuse en interlignage",
+            # Piles CSS reellement injectables dans un font-family.
+            "heading_stack": "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+            "body_stack": "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+        },
+        "principles": [
+            "Sobriete",
+            "Elegance",
+            "Respect du consommateur",
+            "Mentions de moderation systematiques",
+        ],
+        "imagery": "Corporate, epuree, humaine : portraits naturels, lumiere douce, peu de saturation.",
+        "official": False,
+        "avertissement": CHARTER_DISCLAIMER,
+    },
+    "ricard_brand": {
+        "label": "Ricard (marque)",
+        "description": "Identite de marque : solaire, conviviale, ancree dans le Sud.",
+        "colors": {
+            "primary": "#F7D117",
+            "secondary": "#0B3C8C",
+            "background": "#FFFDF5",
+            "text": "#14243F",
+        },
+        "color_notes": {
+            "primary": "Jaune Ricard (aplats, CTA)",
+            "secondary": "Bleu (titres, contrastes)",
+            "background": "Blanc casse legerement chaud",
+            "text": "Bleu tres fonce",
+        },
+        "fonts": {
+            "heading": "Display grasse et condensee, en capitales",
+            "body": "Sans-serif amicale et lisible",
+            # Piles CSS reellement injectables dans un font-family.
+            "heading_stack": "'Oswald', 'Anton', Impact, 'Arial Narrow', sans-serif",
+            "body_stack": "'Nunito Sans', 'Open Sans', Helvetica, Arial, sans-serif",
+        },
+        "principles": [
+            "Convivialite",
+            "Soleil",
+            "Partage",
+            "Sud de la France",
+            "Chaleur mediterraneenne",
+        ],
+        "imagery": "Moments partages : terrasse, tablee, lumiere chaude de fin d'apres-midi.",
+        "official": False,
+        "avertissement": CHARTER_DISCLAIMER,
+    },
+}
+
+
+# =============================================================================
+# TONS DE VOIX (catalogue serveur)
+# =============================================================================
+
+TONE_DISCLAIMER = (
+    "Approximation non officielle du ton de marque, reconstituee a partir de "
+    "communications publiques. A remplacer par le guide editorial reel du client."
+)
+
+TONES_OF_VOICE: dict[str, dict[str, Any]] = {
+    "corporate_institutional": {
+        "label": "Institutionnel (maison mere)",
+        "description": "Prise de parole corporate, mesuree et responsable.",
+        "register": (
+            "Vouvoiement, phrases completes, vocabulaire mesure, zero argot, zero emoji."
+        ),
+        "posture": "Responsable, factuelle, engagee (RSE, moderation).",
+        "cta_style": "Sobre et explicite (ex: \"Decouvrir nos engagements\").",
+        "cta_examples": [
+            "Decouvrir nos engagements",
+            "Consulter le rapport",
+            "En savoir plus",
+        ],
+        "avoid": ["Argot", "Emojis", "Superlatifs promotionnels", "Injonction a consommer"],
+        "compliance": [
+            f"Toute copie marketing doit porter la mention : \"{MODERATION_MESSAGE}\"",
+            "Ne jamais s'adresser aux mineurs ni evoquer un public de moins de 18 ans.",
+        ],
+        "moderation_message": MODERATION_MESSAGE,
+        "official": False,
+        "avertissement": TONE_DISCLAIMER,
+    },
+    "ricard_convivial": {
+        "label": "Convivial (marque Ricard)",
+        "description": "Prise de parole de marque, chaleureuse et complice.",
+        "register": (
+            "Tutoiement, phrases courtes, energie, chaleur, emojis avec parcimonie."
+        ),
+        "posture": "Complice, generationnelle, ancree dans le Sud.",
+        "cta_style": "Direct et invitant (ex: \"Rejoins la tablee\").",
+        "cta_examples": [
+            "Rejoins la tablee",
+            "Viens partager le moment",
+            "Je reserve ma place",
+        ],
+        "avoid": ["Jargon corporate", "Phrases longues", "Ton distant"],
+        "compliance": [
+            f"Toute copie marketing doit porter la mention : \"{MODERATION_MESSAGE}\"",
+            "Ne jamais s'adresser aux mineurs ni evoquer un public de moins de 18 ans.",
+        ],
+        "moderation_message": MODERATION_MESSAGE,
+        "official": False,
+        "avertissement": TONE_DISCLAIMER,
+    },
+}
+
+
+def get_brand_charters() -> list[dict[str, Any]]:
+    """Retourne le catalogue des chartes de marque disponibles."""
+    return [{"key": key, "id": key, **value} for key, value in BRAND_CHARTERS.items()]
+
+
+def get_brand_charter(charter_id: str) -> dict[str, Any] | None:
+    """Retourne une charte de marque par son identifiant.
+
+    Retourne None si la charte n'existe pas.
+    """
+    charter = BRAND_CHARTERS.get(charter_id)
+    if charter is None:
+        return None
+    return {"key": charter_id, "id": charter_id, **charter}
+
+
+def get_tones() -> list[dict[str, Any]]:
+    """Retourne le catalogue des tons de voix disponibles."""
+    return [{"key": key, "id": key, **value} for key, value in TONES_OF_VOICE.items()]
+
+
+def get_tone(tone_id: str) -> dict[str, Any] | None:
+    """Retourne un ton de voix par son identifiant.
+
+    Retourne None si le ton n'existe pas.
+    """
+    tone = TONES_OF_VOICE.get(tone_id)
+    if tone is None:
+        return None
+    return {"key": tone_id, "id": tone_id, **tone}

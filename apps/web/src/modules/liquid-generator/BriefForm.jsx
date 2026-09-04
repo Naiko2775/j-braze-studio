@@ -26,6 +26,31 @@ const FALLBACK_TEMPLATES = [
   { id: "sms_message", name: "SMS", description: "Message SMS court avec lien et opt-out (max 160 chars)", category: "sms" },
 ];
 
+/* ── Chartes de marque (chargees dynamiquement, fallback statique) ──
+   Approximations non officielles : voir le champ `avertissement`. */
+const FALLBACK_BRAND_CHARTERS = [
+  {
+    id: "pernod_ricard_corporate",
+    label: "Pernod Ricard (institutionnel)",
+    colors: { primary: "#0A1E3C", secondary: "#C9A227", background: "#FFFFFF", text: "#1A1A1A" },
+    avertissement:
+      "Approximation non officielle reconstituee a partir de l'identite de marque publiquement observable. Ce n'est pas la charte graphique officielle de la marque : a remplacer par la charte reelle fournie par le client.",
+  },
+  {
+    id: "ricard_brand",
+    label: "Ricard (marque)",
+    colors: { primary: "#F7D117", secondary: "#0B3C8C", background: "#FFFDF5", text: "#14243F" },
+    avertissement:
+      "Approximation non officielle reconstituee a partir de l'identite de marque publiquement observable. Ce n'est pas la charte graphique officielle de la marque : a remplacer par la charte reelle fournie par le client.",
+  },
+];
+
+/* ── Tons de voix (charges dynamiquement, fallback statique) ── */
+const FALLBACK_TONES = [
+  { id: "corporate_institutional", label: "Institutionnel (maison mere)", description: "Vouvoiement, phrases completes, posture responsable." },
+  { id: "ricard_convivial", label: "Convivial (marque Ricard)", description: "Tutoiement, phrases courtes, chaleur du Sud." },
+];
+
 const CHANNELS = [
   { id: "email", label: "Email" },
   { id: "in-app", label: "In-App" },
@@ -105,16 +130,28 @@ const EXAMPLE_BRIEFS_BY_CATEGORY = {
   ],
 };
 
-export default function BriefForm({ onResult }) {
+export default function BriefForm({ onResult, onLoadingChange }) {
   const [brief, setBrief] = useState("");
   const [category, setCategory] = useState("banner");
   const [templateType, setTemplateType] = useState("hero_banner");
   const [channel, setChannel] = useState("email");
+  const [brandCharter, setBrandCharter] = useState("");
+  const [toneOfVoice, setToneOfVoice] = useState("");
   const [projectName, setProjectName] = useState("");
   const [templates, setTemplates] = useState(FALLBACK_TEMPLATES);
+  const [charters, setCharters] = useState(FALLBACK_BRAND_CHARTERS);
+  const [tones, setTones] = useState(FALLBACK_TONES);
 
   const { loading, error, call } = useApi();
+
+  // Remonte l'etat de chargement au parent, qui masque alors son etat vide
+  // "Pret a generer" pendant l'attente (meme motif que AnalysisForm).
+  useEffect(() => {
+    if (onLoadingChange) onLoadingChange(loading);
+  }, [loading, onLoadingChange]);
   const { call: fetchTemplates } = useApi();
+  const { call: fetchCharters } = useApi();
+  const { call: fetchTones } = useApi();
   const { currentProject } = useProject();
 
   // Pre-fill project name from context
@@ -137,10 +174,34 @@ export default function BriefForm({ onResult }) {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Charge le catalogue des chartes de marque et des tons de voix */
+  useEffect(() => {
+    fetchCharters("/liquid/brand-charters")
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setCharters(data);
+      })
+      .catch(() => {
+        /* Utilise le fallback statique */
+      });
+    fetchTones("/liquid/tones")
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setTones(data);
+      })
+      .catch(() => {
+        /* Utilise le fallback statique */
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* Templates filtres par categorie */
   const filteredTemplates = useMemo(
     () => templates.filter((tpl) => (tpl.category || "banner") === category),
     [templates, category]
+  );
+
+  /* Charte selectionnee : sert a l'avertissement et aux pastilles de couleur */
+  const selectedCharter = useMemo(
+    () => charters.find((c) => c.id === brandCharter) || null,
+    [charters, brandCharter]
   );
 
   /* Exemples de briefs selon la categorie */
@@ -175,6 +236,8 @@ export default function BriefForm({ onResult }) {
           brief: brief.trim(),
           template_type: templateType,
           channel,
+          brand_charter: brandCharter || undefined,
+          tone_of_voice: toneOfVoice || undefined,
           project_name: projectName.trim() || undefined,
           project_id: currentProject?.id || undefined,
         }),
@@ -246,7 +309,6 @@ export default function BriefForm({ onResult }) {
                   key={cat.id}
                   type="button"
                   onClick={() => setCategory(cat.id)}
-                  disabled={loading}
                   style={{
                     flex: 1,
                     padding: "10px 16px",
@@ -255,10 +317,9 @@ export default function BriefForm({ onResult }) {
                     color: category === cat.id ? "#fff" : "var(--color-text-secondary)",
                     fontWeight: 600,
                     fontSize: "0.85rem",
-                    cursor: loading ? "not-allowed" : "pointer",
+                    cursor: "pointer",
                     transition: "all 0.15s",
                     fontFamily: "var(--font-family)",
-                    opacity: loading ? 0.5 : 1,
                     borderRight: "1px solid var(--color-border)",
                   }}
                 >
@@ -316,7 +377,6 @@ export default function BriefForm({ onResult }) {
                 key={ex.label}
                 type="button"
                 onClick={() => handleExampleClick(ex.brief)}
-                disabled={loading}
                 style={{
                   background: "var(--color-bg)",
                   border: "1px solid var(--color-border)",
@@ -325,17 +385,14 @@ export default function BriefForm({ onResult }) {
                   fontSize: "0.78rem",
                   color: "var(--color-text-secondary)",
                   fontWeight: 600,
-                  cursor: loading ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   transition: "all 0.15s",
                   fontFamily: "var(--font-family)",
-                  opacity: loading ? 0.5 : 1,
                 }}
                 onMouseEnter={(e) => {
-                  if (!loading) {
-                    e.target.style.background = "var(--color-navy)";
-                    e.target.style.color = "#fff";
-                    e.target.style.borderColor = "var(--color-navy)";
-                  }
+                  e.target.style.background = "var(--color-navy)";
+                  e.target.style.color = "#fff";
+                  e.target.style.borderColor = "var(--color-navy)";
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.background = "var(--color-bg)";
@@ -388,6 +445,102 @@ export default function BriefForm({ onResult }) {
             </select>
           </div>
 
+          {/* Brand charter selector */}
+          <div className="form-group">
+            <label className="label" htmlFor="lq-charter">
+              Charte de marque (optionnel)
+            </label>
+            <select
+              id="lq-charter"
+              className="select"
+              value={brandCharter}
+              onChange={(e) => setBrandCharter(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Aucune charte (couleurs libres)</option>
+              {charters.map((ch) => (
+                <option key={ch.id} value={ch.id}>
+                  {ch.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Pastilles de couleur de la charte selectionnee */}
+            {selectedCharter?.colors && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 8,
+                }}
+              >
+                {["primary", "secondary", "background", "text"].map((slot) => (
+                  <span
+                    key={slot}
+                    title={`${slot} ${selectedCharter.colors[slot] || ""}`}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      background: selectedCharter.colors[slot] || "transparent",
+                      border: "1px solid var(--color-border)",
+                      display: "inline-block",
+                    }}
+                  />
+                ))}
+                <span className="text-xs text-muted">
+                  Couleurs appliquees a la generation
+                </span>
+              </div>
+            )}
+
+            {/* Avertissement : ces chartes ne sont pas officielles */}
+            {selectedCharter && (
+              <p
+                className="text-xs"
+                style={{
+                  marginTop: 8,
+                  background: "#FFFBEB",
+                  border: "1px solid #FDE68A",
+                  borderRadius: "var(--radius-md)",
+                  padding: "8px 12px",
+                  color: "#92400E",
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>Approximation, non officielle.</strong>{" "}
+                {selectedCharter.avertissement ||
+                  "Charte reconstituee a partir de l'identite de marque publiquement observable : a remplacer par la charte reelle fournie par le client."}
+              </p>
+            )}
+          </div>
+
+          {/* Tone of voice selector */}
+          <div className="form-group">
+            <label className="label" htmlFor="lq-tone">
+              Ton de voix (optionnel)
+            </label>
+            <select
+              id="lq-tone"
+              className="select"
+              value={toneOfVoice}
+              onChange={(e) => setToneOfVoice(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Aucun ton impose (ton du brief)</option>
+              {tones.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted" style={{ display: "block", marginTop: 6 }}>
+              La charte et le ton selectionnes priment sur les couleurs et le ton
+              ecrits dans le brief.
+            </span>
+          </div>
+
           {/* Error */}
           {error && (
             <div
@@ -411,12 +564,12 @@ export default function BriefForm({ onResult }) {
           {/* Submit button */}
           <button
             type="submit"
-            className="btn btn-danger btn-lg w-full"
+            className={`btn btn-danger btn-lg w-full${loading ? " btn-loading" : ""}`}
             disabled={loading || !brief.trim()}
           >
             {loading ? (
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="spinner spinner-sm" />
+                <span className="spinner spinner-sm spinner-light" />
                 Generation en cours...
               </span>
             ) : (

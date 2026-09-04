@@ -4,14 +4,16 @@ import LiquidResult from "./LiquidResult";
 
 export default function LiquidPage() {
   const [result, setResult] = useState(null);
+  const [generating, setGenerating] = useState(false);
 
   return (
     <div>
       {!result ? (
         <>
-          <BriefForm onResult={setResult} />
+          <BriefForm onResult={setResult} onLoadingChange={setGenerating} />
 
-          {/* Empty state */}
+          {/* Empty state : masque pendant la generation, il contredisait le spinner */}
+          {!generating && (
           <div style={{ textAlign: "center", padding: "48px 16px 24px" }}>
             <div style={{ color: "var(--color-red)", fontSize: "2.2rem", marginBottom: 8 }}>
               {"\u2728"}
@@ -40,6 +42,7 @@ export default function LiquidPage() {
               et variantes A/B.
             </p>
           </div>
+          )}
         </>
       ) : (
         <LiquidResult result={result} onReset={() => setResult(null)} />

@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from models.db import get_db
 from models.generation import Generation
+from services.liquid.templates import get_brand_charters as svc_get_brand_charters
 from services.liquid.templates import get_templates as svc_get_templates
+from services.liquid.templates import get_tones as svc_get_tones
 from services.liquid.generator import generate_banner
 
 
@@ -20,6 +22,8 @@ class GenerateRequest(BaseModel):
     brief: str
     template_type: str | None = None
     channel: str | None = None
+    brand_charter: str | None = None
+    tone_of_voice: str | None = None
     project_name: str | None = None
     project_id: str | None = None
     model: str | None = None
@@ -40,6 +44,8 @@ def generate(req: GenerateRequest, db: Session = Depends(get_db)):
             brief=req.brief,
             template_type=req.template_type,
             channel=req.channel,
+            brand_charter=req.brand_charter,
+            tone_of_voice=req.tone_of_voice,
             model=req.model,
         )
     except ValueError as exc:
@@ -74,6 +80,22 @@ def list_templates(category: str | None = None):
         category: Filtre optionnel par categorie ('banner', 'email', 'push', 'sms').
     """
     return svc_get_templates(category=category)
+
+
+@router.get("/brand-charters")
+def list_brand_charters():
+    """Retourne le catalogue des chartes de marque.
+
+    Ces chartes sont des approximations non officielles : chaque entree porte
+    un champ `avertissement` que le front doit afficher.
+    """
+    return svc_get_brand_charters()
+
+
+@router.get("/tones")
+def list_tones():
+    """Retourne le catalogue des tons de voix."""
+    return svc_get_tones()
 
 
 @router.get("/history")

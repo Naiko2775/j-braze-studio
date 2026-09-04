@@ -9,6 +9,18 @@
  */
 import { useRef, useEffect, useState } from "react";
 
+/* ── Helper : couleur de texte lisible sur un fond donne ── */
+function readableTextOn(hexColor, fallback = "#ffffff") {
+  const value = String(hexColor || "").replace("#", "");
+  if (value.length !== 6) return fallback;
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) return fallback;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#1A1A1A" : "#ffffff";
+}
+
 /* ── Helper : determine la categorie depuis le nom du template ── */
 function getCategory(template) {
   if (!template) return "banner";
@@ -427,9 +439,20 @@ export default function BannerPreview({ data }) {
 
   /* ── Banner templates (existing) ── */
   const p = data.params || {};
-  const bgColor = p.bg_color || "#040066";
-  const textColor = p.text_color || "#ffffff";
-  const ctaColor = p.cta_color || "#f00a0a";
+  // Resolution : params generes > couleurs de la charte selectionnee > defauts.
+  // La preview ne doit jamais contredire le code Liquid que l'utilisateur copie.
+  const charter =
+    data.brand_charter && typeof data.brand_charter === "object" ? data.brand_charter : null;
+  const charterColors = charter?.colors || {};
+  const charterFonts = charter?.fonts || {};
+  const bgColor = p.bg_color || charterColors.background || "#040066";
+  const textColor = p.text_color || charterColors.text || "#ffffff";
+  const ctaColor = p.cta_color || charterColors.primary || "#f00a0a";
+  const bodyFont = p.body_font || charterFonts.body_stack || "inherit";
+  // heading_stack etait resolu mais jamais applique : le code Liquid utilisait
+  // la police de titre de la charte et la preview affichait celle du corps.
+  const headingFont = p.heading_font || charterFonts.heading_stack || bodyFont;
+  const ctaTextColor = readableTextOn(ctaColor);
 
   /* ── Testimonial ── */
   if (data.template === "testimonial") {
@@ -438,6 +461,7 @@ export default function BannerPreview({ data }) {
         style={{
           background: bgColor,
           color: textColor,
+          fontFamily: bodyFont,
           borderRadius: 12,
           padding: "40px 32px",
           textAlign: "center",
@@ -466,7 +490,7 @@ export default function BannerPreview({ data }) {
               display: "inline-block",
               marginTop: 20,
               background: ctaColor,
-              color: "#fff",
+              color: ctaTextColor,
               padding: "10px 28px",
               borderRadius: 6,
               fontWeight: 600,
@@ -487,6 +511,7 @@ export default function BannerPreview({ data }) {
         style={{
           background: bgColor,
           color: textColor,
+          fontFamily: bodyFont,
           borderRadius: 12,
           padding: 32,
           display: "flex",
@@ -514,7 +539,7 @@ export default function BannerPreview({ data }) {
             <span
               style={{
                 background: ctaColor,
-                color: "#fff",
+                color: ctaTextColor,
                 padding: "3px 10px",
                 borderRadius: 4,
                 fontSize: 11,
@@ -531,6 +556,7 @@ export default function BannerPreview({ data }) {
               fontWeight: 700,
               margin: "8px 0 4px",
               lineHeight: 1.2,
+              fontFamily: headingFont,
             }}
           >
             {p.product_name || p.headline || "Produit"}
@@ -565,7 +591,7 @@ export default function BannerPreview({ data }) {
               style={{
                 display: "inline-block",
                 background: ctaColor,
-                color: "#222",
+                color: ctaTextColor,
                 padding: "10px 24px",
                 borderRadius: 6,
                 fontWeight: 600,
@@ -598,6 +624,7 @@ export default function BannerPreview({ data }) {
             fontWeight: 800,
             marginBottom: 16,
             lineHeight: 1.2,
+            fontFamily: headingFont,
           }}
         >
           {p.headline || "Offre limitee"}
@@ -638,7 +665,7 @@ export default function BannerPreview({ data }) {
             style={{
               display: "inline-block",
               background: ctaColor,
-              color: "#fff",
+              color: ctaTextColor,
               padding: "12px 32px",
               borderRadius: 6,
               fontWeight: 700,
@@ -659,6 +686,7 @@ export default function BannerPreview({ data }) {
         style={{
           background: bgColor,
           color: textColor,
+          fontFamily: bodyFont,
           borderRadius: 12,
           padding: "32px 28px",
           textAlign: "center",
@@ -670,6 +698,7 @@ export default function BannerPreview({ data }) {
             fontWeight: 700,
             marginBottom: 16,
             lineHeight: 1.3,
+            fontFamily: headingFont,
           }}
         >
           {p.headline || "Call to action"}
@@ -679,7 +708,7 @@ export default function BannerPreview({ data }) {
             style={{
               display: "inline-block",
               background: ctaColor,
-              color: "#fff",
+              color: ctaTextColor,
               padding: "12px 32px",
               borderRadius: 6,
               fontWeight: 700,
@@ -699,6 +728,7 @@ export default function BannerPreview({ data }) {
       style={{
         background: `linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%)`,
         color: textColor,
+        fontFamily: bodyFont,
         borderRadius: 12,
         padding: "48px 32px",
         textAlign: "center",
@@ -724,6 +754,7 @@ export default function BannerPreview({ data }) {
           fontWeight: 800,
           marginBottom: 12,
           lineHeight: 1.2,
+          fontFamily: headingFont,
           position: "relative",
         }}
       >
@@ -748,7 +779,7 @@ export default function BannerPreview({ data }) {
           style={{
             display: "inline-block",
             background: ctaColor,
-            color: "#222",
+            color: ctaTextColor,
             padding: "12px 32px",
             borderRadius: 6,
             fontWeight: 700,
