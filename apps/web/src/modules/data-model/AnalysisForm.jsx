@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApi } from "../../shared/hooks/useApi";
 import { useProject } from "../../shared/context/ProjectContext";
 
@@ -43,20 +43,47 @@ const ICON_MAP = {
   bell: "\uD83D\uDD14",
 };
 
-export default function AnalysisForm({ onResult, loading: externalLoading }) {
+export default function AnalysisForm({ onResult, loading: externalLoading, onLoadingChange }) {
   const [useCase, setUseCase] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const { loading, error, call } = useApi();
   const { currentProject } = useProject();
-
-  // Pre-fill project name from context
-  useEffect(() => {
-    if (currentProject && !projectName) {
-      setProjectName(currentProject.name);
-    }
-  }, [currentProject]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastProjectIdRef = useRef(null);
 
   const isLoading = loading || externalLoading;
+
+  // Synchronise le nom du projet a chaque changement de projet courant.
+  // Sans cela le champ garde l'ancien nom et l'historique est etiquete
+  // avec le mauvais projet.
+  useEffect(() => {
+    const projectId = currentProject?.id ?? null;
+    if (projectId === lastProjectIdRef.current) return;
+    lastProjectIdRef.current = projectId;
+    setProjectName(currentProject ? currentProject.name || "" : "");
+  }, [currentProject]);
+
+  // Compteur de temps ecoule. L'endpoint /data-model/analyze ne streame pas,
+  // le seul signal de progression possible est donc cote client.
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsed(0);
+      return undefined;
+    }
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isLoading]);
+
+  // Permet a la page parente de masquer son empty state pendant l'analyse.
+  useEffect(() => {
+    if (onLoadingChange) onLoadingChange(isLoading);
+  }, [isLoading, onLoadingChange]);
+
+  // Au dela de la fenetre annoncee, on previent plutot que de laisser
+  // la barre coincee : un depassement ne remonte que via une erreur 504.
+  const isOvertime = elapsed > 120;
+  const progressPct = Math.min(97, Math.round((elapsed / 120) * 100));
 
   const handleTemplateClick = (brief) => {
     setUseCase(brief);
@@ -189,15 +216,55 @@ export default function AnalysisForm({ onResult, loading: externalLoading }) {
             </div>
           )}
 
+          {/* Progression pendant l'analyse (60 a 120 s en moyenne).
+              Pas de aria-live : le compteur changerait toutes les secondes et
+              serait annonce en boucle, le bouton porte deja l'etat. */}
+          {isLoading && (
+            <div
+              style={{
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                padding: "12px 14px",
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: "var(--color-border)",
+                  borderRadius: "var(--radius-full)",
+                  height: 6,
+                  overflow: "hidden",
+                  marginBottom: 8,
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${progressPct}%`,
+                    background: "var(--color-red)",
+                    borderRadius: "var(--radius-full)",
+                    transition: "width 1s linear",
+                  }}
+                />
+              </div>
+              <span className="text-xs text-secondary">
+                {isOvertime
+                  ? `Analyse en cours - ${elapsed}s - cela prend plus de temps que prevu`
+                  : `Analyse en cours - ${elapsed}s - comptez 60 a 120 s`}
+              </span>
+            </div>
+          )}
+
           {/* Submit button */}
           <button
             type="submit"
-            className="btn btn-danger btn-lg w-full"
+            className={`btn btn-danger btn-lg w-full${isLoading ? " btn-loading" : ""}`}
             disabled={isLoading || !useCase.trim()}
           >
             {isLoading ? (
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="spinner spinner-sm" />
+                <span className="spinner spinner-sm spinner-light" />
                 Analyse en cours...
               </span>
             ) : (

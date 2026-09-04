@@ -20,7 +20,7 @@
   --color-border-light: #f0f0f0;
   --color-text: #222222;
   --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
+  --color-text-muted: #6b7280;
 
   /* Etats */
   --color-success: #22c55e;
@@ -223,6 +223,16 @@ code, pre {
   transform: none;
 }
 
+/* Chargement : le bouton reste desactive mais garde son contraste.
+   Le gris disabled tombait a 2.05:1, illisible pendant 60 a 120 s. */
+.btn.btn-loading:disabled {
+  background: var(--color-red);
+  color: #fff;
+  opacity: 0.92;
+  cursor: progress;
+  transform: none;
+}
+
 /* Ghost */
 .btn-ghost {
   background: transparent;
@@ -336,7 +346,9 @@ code, pre {
   font-family: var(--font-family);
 }
 .tab:hover {
-  color: var(--color-text-secondary);
+  /* text-secondary vaut desormais la meme valeur que text-muted :
+     on passe sur --color-text pour garder un survol visible. */
+  color: var(--color-text);
 }
 .tab.active {
   color: var(--color-navy);
@@ -433,6 +445,11 @@ code, pre {
   width: 20px;
   height: 20px;
   border-width: 2px;
+}
+/* Variante posee sur un fond colore (bouton en cours de chargement) */
+.spinner-light {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
 }
 
 /* ── Utilities ── */

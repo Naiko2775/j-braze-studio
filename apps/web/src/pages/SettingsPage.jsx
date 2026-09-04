@@ -73,6 +73,7 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState(CLAUDE_MODELS[0].value);
   const [brazeUrl, setBrazeUrl] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   // Cle API Claude
   const [apiKey, setApiKey] = useState("");
@@ -173,6 +174,7 @@ export default function SettingsPage() {
   // Sauvegarder le modele
   const handleSave = async () => {
     setSaved(false);
+    setSaveError(null);
     try {
       await saveApi.call("/app-config", {
         method: "POST",
@@ -183,10 +185,10 @@ export default function SettingsPage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {
-      // Endpoint pas encore disponible, feedback visuel quand meme
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      // Le message "Sauvegarde effectuee" s'affichait aussi en cas d'echec :
+      // on remonte desormais l'erreur reelle.
+      setSaveError(err?.message || "Echec de la sauvegarde");
     }
   };
 
@@ -283,6 +285,11 @@ export default function SettingsPage() {
               {saved && (
                 <span className="text-sm text-success font-semibold">
                   Sauvegarde effectuee
+                </span>
+              )}
+              {saveError && (
+                <span className="text-sm font-semibold" style={{ color: "var(--color-error)" }}>
+                  {saveError}
                 </span>
               )}
             </div>

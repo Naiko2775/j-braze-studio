@@ -41,6 +41,7 @@ export default function ProjectPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   const fetchProject = useCallback(async (projectId) => {
     setLoading(true);
@@ -66,6 +67,13 @@ export default function ProjectPage() {
       fetchProject(id);
     }
   }, [id, fetchProject]);
+
+  // La demande d'archivage se desarme seule si l'utilisateur ne confirme pas.
+  useEffect(() => {
+    if (!confirmArchive) return undefined;
+    const timer = setTimeout(() => setConfirmArchive(false), 5000);
+    return () => clearTimeout(timer);
+  }, [confirmArchive]);
 
   // If no id param, show project list
   if (!id) {
@@ -127,6 +135,13 @@ export default function ProjectPage() {
   };
 
   const handleArchive = async () => {
+    // Le bouton declenchait un DELETE des le premier clic, juste a cote
+    // de "Modifier" : on exige une confirmation explicite.
+    if (!confirmArchive) {
+      setConfirmArchive(true);
+      return;
+    }
+    setConfirmArchive(false);
     try {
       const res = await fetch(`${API_BASE}/projects/${project.id}`, { method: "DELETE" });
       if (res.ok) {
@@ -168,8 +183,17 @@ export default function ProjectPage() {
           </span>
           <button className="btn btn-secondary btn-sm" onClick={handleEdit}>Modifier</button>
           {project.status !== "archived" && (
-            <button className="btn btn-ghost btn-sm" style={{ color: "var(--color-error)" }} onClick={handleArchive}>
-              Archiver
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{
+                color: "var(--color-error)",
+                fontWeight: confirmArchive ? 700 : 600,
+              }}
+              onClick={handleArchive}
+              onBlur={() => setConfirmArchive(false)}
+              title={confirmArchive ? "Cliquez a nouveau pour archiver ce projet" : "Archiver ce projet"}
+            >
+              {confirmArchive ? "Confirmer l'archivage ?" : "Archiver"}
             </button>
           )}
         </div>

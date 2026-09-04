@@ -6,6 +6,7 @@ import EntityExplorer from "./EntityExplorer";
 
 export default function DataModelPage() {
   const [result, setResult] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const location = useLocation();
 
   // Si le path est /data-model/explorer, afficher l'EntityExplorer
@@ -19,9 +20,10 @@ export default function DataModelPage() {
     <div>
       {!result ? (
         <>
-          <AnalysisForm onResult={setResult} />
+          <AnalysisForm onResult={setResult} onLoadingChange={setAnalyzing} />
 
-          {/* Empty state */}
+          {/* Empty state : masque pendant l'analyse, il contredisait le spinner */}
+          {!analyzing && (
           <div style={{ textAlign: "center", padding: "48px 16px 24px" }}>
             <div style={{ color: "var(--color-red)", fontSize: "2.2rem", marginBottom: 8 }}>
               {"\u26A1"}
@@ -43,6 +45,7 @@ export default function DataModelPage() {
               les canaux de messaging et la hierarchie du data model.
             </p>
           </div>
+          )}
         </>
       ) : (
         <AnalysisResult result={result} onReset={() => setResult(null)} />
