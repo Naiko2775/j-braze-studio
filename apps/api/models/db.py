@@ -84,7 +84,46 @@ def normalize_database_url(raw: str | None) -> str:
     return url
 
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+def _is_db_url(value: str | None) -> bool:
+    return bool(value) and any(value.startswith(p) for p in _VALID_PREFIXES)
+
+
+def resolve_database_url() -> tuple[str | None, str]:
+    """Trouve l'URL de base dans l'environnement, prefixe compris.
+
+    L'integration Vercel-Neon peut prefixer toutes ses variables (ici
+    "braze_"), si bien que la chaine reelle vit dans braze_DATABASE_URL et non
+    dans DATABASE_URL. C'est exactement cette confusion prefixe/valeur qui a
+    fait tomber l'application sur du SQLite ephemere.
+
+    Un DATABASE_URL explicite et valide gagne toujours. Sinon on retient la
+    premiere variable valide se terminant par _DATABASE_URL, puis
+    _POSTGRES_URL -- jamais _POSTGRES_URL_NO_SSL, dont le suffixe ne
+    correspond pas, ce qui evite de degrader la connexion en clair.
+
+    Retourne (url, nom_de_la_variable) pour journaliser la source sans jamais
+    exposer la valeur.
+    """
+    explicit = os.getenv("DATABASE_URL")
+    if _is_db_url(explicit):
+        return explicit, "DATABASE_URL"
+
+    for suffix in ("_DATABASE_URL", "_POSTGRES_URL"):
+        for key in sorted(os.environ):
+            if key.endswith(suffix) and _is_db_url(os.environ[key]):
+                return os.environ[key], key
+
+    return explicit, "DATABASE_URL"
+
+
+DATABASE_URL, _source_var = resolve_database_url()
+if _source_var != "DATABASE_URL":
+    logger.warning(
+        "DATABASE_URL absente ou invalide : utilisation de %s, fournie par "
+        "l'integration. Corriger ou supprimer DATABASE_URL pour lever "
+        "l'ambiguite.",
+        _source_var,
+    )
 _url = normalize_database_url(DATABASE_URL)
 
 
