@@ -11,6 +11,10 @@ load_dotenv()
 # Ajouter le repertoire api au path
 sys.path.insert(0, os.path.dirname(__file__) + "/..")
 
+# Doit preceder l'import de `models` : son __init__ appelle ensure_tables(),
+# qui creerait le schema avant les migrations et ferait echouer upgrade head.
+os.environ["JBRAZE_SKIP_AUTO_CREATE"] = "1"
+
 from models.db import Base, build_connect_args, normalize_database_url
 from models.analysis import Analysis
 from models.generation import Generation

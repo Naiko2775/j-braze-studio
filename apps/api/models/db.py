@@ -87,6 +87,7 @@ def normalize_database_url(raw: str | None) -> str:
 DATABASE_URL = os.getenv("DATABASE_URL")
 _url = normalize_database_url(DATABASE_URL)
 
+
 def build_connect_args(url: str) -> dict:
     """Arguments de connexion SQLAlchemy, partages avec alembic/env.py.
 
@@ -119,8 +120,19 @@ _tables_created = False
 
 
 def ensure_tables():
-    """Crée les tables si elles n'existent pas (SQLite serverless)."""
+    """Cree les tables si elles n'existent pas (SQLite serverless).
+
+    Appelee a l'import de `models` : en serverless, Mangum tourne avec
+    lifespan="off", donc les handlers de startup FastAPI ne s'executent pas.
+
+    Sous Alembic, ce raccourci doit rester inerte : create_all() creerait le
+    schema avant que les migrations ne tournent, et `upgrade head` echouerait
+    sur "table already exists". Les migrations sont la source de verite du
+    schema ; ce helper n'est qu'un filet pour le SQLite ephemere.
+    """
     global _tables_created
+    if os.getenv("JBRAZE_SKIP_AUTO_CREATE"):
+        return
     if _tables_created:
         return
     if _url.startswith("sqlite"):
