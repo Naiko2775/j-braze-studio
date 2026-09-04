@@ -11,7 +11,7 @@ load_dotenv()
 # Ajouter le repertoire api au path
 sys.path.insert(0, os.path.dirname(__file__) + "/..")
 
-from models.db import Base, normalize_database_url
+from models.db import Base, build_connect_args, normalize_database_url
 from models.analysis import Analysis
 from models.generation import Generation
 from models.migration_job import MigrationJob
@@ -48,11 +48,13 @@ def run_migrations_offline():
 
 def run_migrations_online():
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = get_url()
+    url = get_url()
+    configuration["sqlalchemy.url"] = url
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=build_connect_args(url),
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

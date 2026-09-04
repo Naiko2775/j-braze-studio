@@ -87,16 +87,25 @@ def normalize_database_url(raw: str | None) -> str:
 DATABASE_URL = os.getenv("DATABASE_URL")
 _url = normalize_database_url(DATABASE_URL)
 
-connect_args = {}
-if _url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-elif "pg8000" in _url:
-    # Sans ssl_context explicite, pg8000 chiffre mais ne verifie NI le nom
-    # d'hote NI le certificat (cf. pg8000/core.py : check_hostname=False,
-    # verify_mode=CERT_NONE). On fournit un contexte verifiant.
-    import ssl
+def build_connect_args(url: str) -> dict:
+    """Arguments de connexion SQLAlchemy, partages avec alembic/env.py.
 
-    connect_args = {"ssl_context": ssl.create_default_context()}
+    Les migrations et l'application doivent viser la meme base avec les
+    memes garanties TLS.
+    """
+    if url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    if "pg8000" in url:
+        # Sans ssl_context explicite, pg8000 chiffre mais ne verifie NI le nom
+        # d'hote NI le certificat (cf. pg8000/core.py : check_hostname=False,
+        # verify_mode=CERT_NONE). On fournit un contexte verifiant.
+        import ssl
+
+        return {"ssl_context": ssl.create_default_context()}
+    return {}
+
+
+connect_args = build_connect_args(_url)
 
 engine = create_engine(_url, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
