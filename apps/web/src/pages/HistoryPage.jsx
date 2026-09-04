@@ -240,37 +240,51 @@ export default function HistoryPage() {
   const currentApi = apiMap[activeTab];
   const rawEntries = Array.isArray(currentApi.data) ? currentApi.data : [];
 
-  // Filtrage + tri par date decroissante
-  const entries = useMemo(() => {
-    let list = rawEntries;
-    // Filtre par projet selectionne (via project_id ou project_name)
-    if (currentProject) {
-      list = list.filter((e) =>
+  // Une entree creee hors de tout projet n'appartient a aucun projet : la
+  // masquer des qu'un projet est selectionne la rendait inaccessible, aucun
+  // selecteur ne permettant de revenir a "sans projet". Elle reste visible.
+  const matchesProject = useCallback(
+    (e) => {
+      if (!currentProject) return true;
+      if (!e.project_id && !e.project_name) return true;
+      return (
         e.project_id === currentProject.id ||
-        (!e.project_id && (e.project_name || "").toLowerCase() === currentProject.name.toLowerCase())
+        (!e.project_id &&
+          (e.project_name || "").toLowerCase() === currentProject.name.toLowerCase())
       );
-    }
-    if (filterProject.trim()) {
-      const q = filterProject.trim().toLowerCase();
-      list = list.filter((e) =>
-        (e.project_name || "").toLowerCase().includes(q),
-      );
-    }
-    return [...list].sort((a, b) => {
-      const da = new Date(entryDate(a) || 0);
-      const db = new Date(entryDate(b) || 0);
-      return db - da;
-    });
-  }, [rawEntries, filterProject, currentProject]);
+    },
+    [currentProject],
+  );
 
-  // Compteurs par onglet
+  const applyFilters = useCallback(
+    (list) => {
+      if (!Array.isArray(list)) return [];
+      let out = list.filter(matchesProject);
+      const q = filterProject.trim().toLowerCase();
+      if (q) out = out.filter((e) => (e.project_name || "").toLowerCase().includes(q));
+      return out;
+    },
+    [matchesProject, filterProject],
+  );
+
+  // Tri par date decroissante
+  const entries = useMemo(
+    () =>
+      [...applyFilters(rawEntries)].sort(
+        (a, b) => new Date(entryDate(b) || 0) - new Date(entryDate(a) || 0),
+      ),
+    [rawEntries, applyFilters],
+  );
+
+  // Compteurs par onglet : doivent refleter la liste affichee. Ils comptaient
+  // les donnees brutes, d'ou un onglet annoncant "3" au-dessus d'une liste vide.
   const counts = useMemo(
     () => ({
-      analyses: Array.isArray(analysesApi.data) ? analysesApi.data.length : 0,
-      generations: Array.isArray(generationsApi.data) ? generationsApi.data.length : 0,
-      migrations: Array.isArray(migrationsApi.data) ? migrationsApi.data.length : 0,
+      analyses: applyFilters(analysesApi.data).length,
+      generations: applyFilters(generationsApi.data).length,
+      migrations: applyFilters(migrationsApi.data).length,
     }),
-    [analysesApi.data, generationsApi.data, migrationsApi.data],
+    [analysesApi.data, generationsApi.data, migrationsApi.data, applyFilters],
   );
 
   const handleRefresh = useCallback(() => {
