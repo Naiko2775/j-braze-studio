@@ -211,10 +211,19 @@ def generate_banner(
 
     response = client.messages.create(
         model=model_name,
-        max_tokens=4000,
+        max_tokens=16384,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )
+
+    # Opus 5 reflechit par defaut, et les tokens de reflexion sont decomptes
+    # de max_tokens : un budget trop bas tronque le JSON en pleine chaine et
+    # produit un "Unterminated string" incomprehensible cote utilisateur.
+    if response.stop_reason == "max_tokens":
+        raise ValueError(
+            "Reponse Claude tronquee : la limite max_tokens a ete atteinte "
+            "avant la fin du JSON. Augmenter max_tokens ou raccourcir le brief."
+        )
 
     # Extraction du texte de la reponse
     raw_text = "".join(
