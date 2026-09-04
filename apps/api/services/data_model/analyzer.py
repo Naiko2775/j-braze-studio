@@ -118,10 +118,10 @@ def analyze_use_cases(use_cases: list[str], model: str | None = None) -> dict:
         logger.info("Pas de cle API Anthropic -- mode demo (data model analyzer)")
         return DEMO_RESULTS
 
-    from services.claude_client import get_claude_client, get_default_model
+    from services.claude_client import get_claude_client, get_analysis_model
 
     client = get_claude_client()
-    model = model or get_default_model()
+    model = model or get_analysis_model()
 
     data_model_text = get_data_model_prompt()
     system = SYSTEM_PROMPT.format(data_model=data_model_text)

@@ -38,5 +38,18 @@ def get_claude_client() -> anthropic.Anthropic:
 
 
 def get_default_model() -> str:
-    """Retourne le modele Claude par defaut."""
+    """Retourne le modele Claude par defaut (generation Liquid)."""
     return os.getenv("CLAUDE_DEFAULT_MODEL", "claude-opus-5")
+
+
+def get_analysis_model() -> str:
+    """Modele du module Data Model, choisi pour la reactivite en demo.
+
+    Mesure sur un use case reel (relance panier abandonne, 8057 tokens
+    d'entree) : opus-5 108.9s / sonnet-5 62.6s / haiku-4-5 36.9s, les trois
+    renvoyant un JSON valide et les quatre cles attendues par l'interface.
+    Haiku produit une analyse plus courte -- il omet notamment Catalog /
+    Catalog Item. Pour retrouver l'analyse complete, definir
+    CLAUDE_ANALYSIS_MODEL=claude-opus-5 dans les variables d'environnement.
+    """
+    return os.getenv("CLAUDE_ANALYSIS_MODEL", "claude-haiku-4-5")
